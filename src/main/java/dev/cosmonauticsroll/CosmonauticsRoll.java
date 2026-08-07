@@ -3,6 +3,7 @@ package dev.cosmonauticsroll;
 import com.mojang.logging.LogUtils;
 
 import dev.cosmonauticsroll.debug.DebugCommand;
+import dev.cosmonauticsroll.region.RegionDebugTicker;
 
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.common.Mod;
@@ -37,5 +38,8 @@ public class CosmonauticsRoll {
     public CosmonauticsRoll(IEventBus modEventBus) {
         // DEBUG 调试命令注册（/cosmonauticsroll debug on|off|status）。
         DebugCommand.register();
+        // 阶段 2 调试观察挂接：游戏内输出区域状态日志（仅调试开启时），
+        // 用于 PRD 3.1 的游戏内验收。
+        RegionDebugTicker.register();
     }
 }
