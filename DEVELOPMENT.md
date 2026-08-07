@@ -195,7 +195,7 @@ AI 提问清单（用户检查并回答）：
 目标：
 
 - [ ] 实现跟随身体方向的脚部检测。（`detect.FootSamplingLayout`（局部坐标采样点，随 bodyUp/bodyForward 旋转）+ `detect.FootSurfaceDetector`（核心），纯逻辑）
-- [ ] 获取接触表面法线。（`api.detect.SurfaceQuery` 接口 + `detect.LevelSurfaceQuery` MC 适配层（`Level.getBlockCollisionShape` → 最近面法线，轴向近似））
+- [ ] 获取接触表面法线。（`api.detect.SurfaceQuery` 接口 + `detect.LevelSurfaceQuery` MC 适配层（`BlockState.getCollisionShape` → 最近面法线，轴向近似））
 - [ ] 识别单一表面。（`FootSurfaceResult.SINGLE`，合并同方向）
 - [ ] 拒绝多个不同方向表面。（`FootSurfaceResult.MULTIPLE`）
 - [ ] 建立统一方向表示。（`api.detect.SurfaceNormal` 六轴向枚举）

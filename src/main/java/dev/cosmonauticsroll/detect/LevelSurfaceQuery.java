@@ -13,7 +13,7 @@ import net.minecraft.world.phys.shapes.VoxelShape;
  * 基于 Minecraft 碰撞形状的表面法线查询（PRD 3.2-3：获取脚部接触的方块碰撞面法线）。
  *
  * <p>{@link SurfaceQuery} 的游戏内实现：给定世界坐标采样点，读取该点所在方块的
- * 碰撞形状（{@link Level#getBlockCollisionShape}），若采样点位于形状内部则返回
+ * 碰撞形状（{@code BlockState.getCollisionShape}），若采样点位于形状内部则返回
  * 距离采样点最近的面之外法线（轴向近似）。</p>
  *
  * <p>限制：本实现按轴向面近似（全方块为精确结果）；楼梯/斜面的 45° 斜面在
@@ -37,7 +37,7 @@ public final class LevelSurfaceQuery implements SurfaceQuery {
     @Override
     public SurfaceNormal query(Vec3d p) {
         BlockPos pos = BlockPos.containing(p.x, p.y, p.z);
-        VoxelShape shape = level.getBlockCollisionShape(pos);
+        VoxelShape shape = level.getBlockState(pos).getCollisionShape(level, pos);
         if (shape == null || shape.isEmpty()) {
             return null;
         }
