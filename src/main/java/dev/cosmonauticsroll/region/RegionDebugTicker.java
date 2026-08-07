@@ -1,10 +1,18 @@
 package dev.cosmonauticsroll.region;
 
+import dev.cosmonauticsroll.api.detect.FootSurfaceResult;
+import dev.cosmonauticsroll.api.detect.SurfaceQuery;
+import dev.cosmonauticsroll.api.detect.Vec3d;
 import dev.cosmonauticsroll.debug.Debug;
+import dev.cosmonauticsroll.detect.FootSamplingLayout;
+import dev.cosmonauticsroll.detect.FootSurfaceDetector;
+import dev.cosmonauticsroll.detect.LevelSurfaceQuery;
 import dev.cosmonauticsroll.region.RegionStateMachine.RegionState;
 
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.AABB;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
@@ -15,13 +23,14 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * 调试观察挂接：游戏内实时观察区域状态机（阶段 2 游戏内验收用）。
+ * 调试观察挂接：游戏内实时观察区域状态机与脚部表面检测（阶段 2/3 游戏内验收用）。
  *
  * <p>服务端每个 tick 对每个在线玩家调用 {@link RegionStateMachine#update}，
  * 并在调试开启时输出日志：状态转换（进入/离开）立即输出，稳定状态每
- * {@value #HEARTBEAT_INTERVAL} tick（5 秒）输出一次心跳。维度切换与死亡重生时
- * 调用 {@link RegionStateMachine#reset()}，用于验收「进入/退出无残留状态」
- * （PRD 3.1-6）。</p>
+ * {@value #HEARTBEAT_INTERVAL} tick（5 秒）输出一次心跳；处于适用区域内的玩家
+ * 每 {@value #FOOT_CHECK_INTERVAL} tick（1 秒）输出一次脚部表面检测结果
+ * （NONE/SINGLE(法线)/MULTIPLE）。维度切换与死亡重生时调用
+ * {@link RegionStateMachine#reset()}，用于验收「进入/退出无残留状态」（PRD 3.1-6）。</p>
  *
  * <p>仅用于 Debug 验收模式（{@code /cosmonauticsroll debug on}），不参与正常
  * 游戏逻辑；日志与状态机实例在调试关闭时不产生任何输出与副作用（仅保留每玩家
@@ -31,6 +40,9 @@ public final class RegionDebugTicker {
 
     /** 心跳间隔（tick）：100 tick = 5 秒。 */
     private static final int HEARTBEAT_INTERVAL = 100;
+
+    /** 脚部检测间隔（tick）：20 tick = 1 秒。 */
+    private static final int FOOT_CHECK_INTERVAL = 20;
 
     /** 每玩家状态机（多人预留：按玩家 UUID 区分实例）。 */
     private static final Map<UUID, RegionStateMachine> MACHINES = new HashMap<>();
@@ -52,6 +64,7 @@ public final class RegionDebugTicker {
         }
         tickCount++;
         boolean heartbeat = tickCount % HEARTBEAT_INTERVAL == 0;
+        boolean footCheck = tickCount % FOOT_CHECK_INTERVAL == 0;
         for (ServerPlayer player : event.getServer().getPlayerList().getPlayers()) {
             RegionStateMachine machine = MACHINES.computeIfAbsent(player.getUUID(),
                     uuid -> new RegionStateMachine(RegionRules.DEFAULT));
@@ -70,6 +83,39 @@ public final class RegionDebugTicker {
                 Debug.log("区域心跳：state={} dim={} y={} player={}",
                         state, dim, formatY(centerY), player.getGameProfile().getName());
             }
+            if (machine.isActive() && footCheck) {
+                logFootDetection(player);
+            }
+        }
+    }
+
+    /** 脚部表面检测日志：仅适用区域内玩家，每 1 秒输出一次。 */
+    private static void logFootDetection(ServerPlayer player) {
+        try {
+            Level level = player.level();
+            AABB box = player.getBoundingBox();
+            Vec3d footCenter = new Vec3d(
+                    (box.minX + box.maxX) / 2.0,
+                    box.minY,
+                    (box.minZ + box.maxZ) / 2.0);
+            // 阶段 3：玩家尚未旋转，身体朝上即世界朝上；
+            // 阶段 4 起改为真实身体方向（旋转后检测跟随）。
+            Vec3d bodyUp = new Vec3d(0, 1, 0);
+            // 偏航角（Mojang 映射）：0° = 朝南 +Z，顺时针为正。
+            double yawRad = Math.toRadians(player.getYRot());
+            Vec3d bodyForward = new Vec3d(-Math.sin(yawRad), 0, Math.cos(yawRad));
+
+            SurfaceQuery query = new LevelSurfaceQuery(level);
+            FootSurfaceDetector detector = new FootSurfaceDetector(
+                    FootSamplingLayout.rectangle(), query);
+            FootSurfaceResult result = detector.detect(footCenter, bodyUp, bodyForward);
+
+            Debug.log("脚部检测：result={} bodyUp={} bodyForward={} footY={} player={}",
+                    result, bodyUp, bodyForward, formatY(footCenter.y),
+                    player.getGameProfile().getName());
+        } catch (Exception e) {
+            // 调试观察不应影响正常游戏：任何异常只记日志。
+            Debug.log("脚部检测异常：{}", e.toString());
         }
     }
 

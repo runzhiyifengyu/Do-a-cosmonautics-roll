@@ -210,17 +210,19 @@ AI 提问清单（用户检查并回答）：
 测试说明：
 
 - 纯逻辑测试 `FootSurfaceLogicTest`（33 个断言，9 个用例），与阶段 2 的 `RegionLogicTest`（50 个断言）由统一入口 `LogicTestSuite` 运行（`runLogicTests`，共 83 个断言）。
+- 2026-08-09 Actions 首跑：`compileJava` 失败——`Level.getBlockCollisionShape(BlockPos)` 在 1.21.1 不存在，已改为 `level.getBlockState(pos).getCollisionShape(level, pos)`（`BlockState.getCollisionShape(BlockGetter, BlockPos)` 稳定 API）。
+- 2026-08-09 Actions 二跑：**编译通过 + `runLogicTests` 83/83 全部 [PASS]**（BUILD SUCCESSFUL）。
 - 设备端 IDE 诊断对本次会话新建的纯逻辑文件跨类引用报 `Cannot resolve symbol`（CodeAssist 会话内新文件索引未更新，`find_symbol` 可定位、logictest 引用正常、代码经人工逐行核对）；以 GitHub Actions 编译为准。
-- MC 适配层 `LevelSurfaceQuery` 依赖设备端无法解析的 MC 类，由 Actions 编译验证。
 - 楼梯/斜面 45° 法线暂按轴向近似（阶段 5 楼梯专用逻辑处理）；`LevelSurfaceQuery` 对斜面可能返回 MULTIPLE 而保守不站立。
+- 游戏内验收手段：`RegionDebugTicker` 已扩展——适用区域内玩家每 1 秒输出一次 `脚部检测` 日志（result / bodyUp / bodyForward / footY），覆盖地面 SINGLE(UP)、墙面 SINGLE(水平法线)、墙角 MULTIPLE、悬空 NONE 的观察（PRD 3.2 验收 S+D）。
 
 出口条件：
 
-- 单表面、无表面、多表面三类结果可区分。（逻辑测试已覆盖，待 Actions 执行确认）
+- 单表面、无表面、多表面三类结果可区分。（逻辑测试 33/33 通过 + Actions 编译通过，待用户游戏内验收确认）
 - 用户确认并 commit。（待执行）
 - 未确认前不得进入阶段 4。
 
-当前状态：实现完成（核心纯逻辑 + MC 适配层 + 逻辑测试 33 断言 + 统一测试入口）；等待用户 push 触发 Actions 验证编译与 `runLogicTests`（预期 83/83）、按检查清单游戏内验证、确认并 commit 后进入阶段 4。
+当前状态：实现完成 + Actions 验证通过（编译成功、runLogicTests 83/83）；已加游戏内脚部检测日志；等待用户按阶段 3 检查清单游戏内验收、确认并 commit 后进入阶段 4。
 
 ### 阶段 4：平滑站立和表面行走
 
@@ -423,13 +425,13 @@ AI 提问清单（用户检查并回答）：
 当前状态：
 
 ```text
-阶段 3 实现完成：脚底采样点布局（跟随身体方向旋转）、六轴向统一方向表示、
-表面查询接口 + MC 适配层（getBlockCollisionShape → 最近面法线）、
-检测器（NONE/SINGLE/MULTIPLE 三类结果，合并同方向、拒绝多方向）。
-逻辑测试 FootSurfaceLogicTest 33 断言（地面/墙面/天花板/墙角 MULTIPLE/
-边缘部分接触/身体旋转跟随/只测脚部），与 RegionLogicTest 由 LogicTestSuite
-统一运行（runLogicTests，预期 83/83）。
-等待用户 push 触发 Actions 验证、按阶段 3 检查清单游戏内验证、确认并 commit 后进入阶段 4。
+阶段 3 实现完成 + Actions 验证通过：编译成功（修复 Level.getBlockCollisionShape →
+BlockState.getCollisionShape）、runLogicTests 83/83 全部 [PASS]
+（阶段2 的 50 + 阶段3 的 33，由 LogicTestSuite 统一运行）。
+脚底采样点布局（跟随身体方向旋转）、六轴向统一方向表示（SurfaceNormal）、
+表面查询接口 + MC 适配层（LevelSurfaceQuery）、检测器（NONE/SINGLE/MULTIPLE）。
+RegionDebugTicker 已扩展：适用区域内玩家每 1 秒输出脚部检测日志（游戏内验收用）。
+等待用户按阶段 3 检查清单游戏内验收、确认并 commit 后进入阶段 4。
 ```
 
 已确认：
