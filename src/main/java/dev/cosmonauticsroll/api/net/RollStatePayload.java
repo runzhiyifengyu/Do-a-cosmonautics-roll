@@ -6,14 +6,15 @@ import io.netty.buffer.ByteBuf;
 
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
-import net.neoforged.neoforge.network.payload.CustomPacketPayload;
 
 /**
  * 玩家旋转状态包（多人预留，第一版不注册、不发送）。
  *
- * <p>按开发规则第 4 节预留网络协议结构：使用 NeoForge {@link CustomPacketPayload}
- * 定义玩家旋转状态（pitch/yaw/roll）。第一版只保留结构与编解码器，不注册到
+ * <p>按开发规则第 4 节预留网络协议结构：使用 Minecraft 1.20.5+ 的
+ * {@link CustomPacketPayload}（NeoForge 网络框架基于该接口）定义玩家旋转状态
+ * （pitch/yaw/roll）。第一版只保留结构与编解码器，不注册到
  * {@code RegisterPayloadHandlersEvent}、不发送；多人支持时按 Do a Barrel Roll
  * 的模式（服务端权威 + 客户端复算）注册并同步。</p>
  *

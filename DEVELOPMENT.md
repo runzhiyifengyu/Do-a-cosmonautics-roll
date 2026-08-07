@@ -139,7 +139,7 @@ AI 提问清单（用户检查并回答）：
 - [x] 完成最小依赖配置。（仅 `net.neoforged:neoforge:21.1.235`，无外部模组编译依赖，符合阶段 0 结论）
 - [x] 添加 GitHub Actions。（build.yml：JDK 21 + `./gradlew build` + 上传 mod JAR Artifact；2026-08-07 首跑失败 `./gradlew: Permission denied`，已修复：workflow 中先 `chmod +x gradlew` 再执行，并在 .gitattributes 固定 gradlew 为 LF 行尾）
 - [x] 添加 `.gitignore`。（模板已有，补充 `.platform/` 排除 CodeAssist 本地状态）
-- [x] 创建基础包结构和后续扩展接口。（`dev.cosmonauticsroll` 主类/客户端类；`api.region.RegionRule` 纯函数接口；`api.net.RollStatePayload` 预留包结构，第一版不注册不发送）
+- [x] 创建基础包结构和后续扩展接口。（`dev.cosmonauticsroll` 主类/客户端类；`api.region.RegionRule` 纯函数接口；`api.net.RollStatePayload` 预留包结构，第一版不注册不发送；2026-08-07 二跑编译失败：`CustomPacketPayload` 包名错误，已修正为 Minecraft 原生 `net.minecraft.network.protocol.common.custom.CustomPacketPayload`）
 
 检查：
 
@@ -154,7 +154,7 @@ AI 提问清单（用户检查并回答）：
 - 用户确认并 commit。（待用户执行）
 - 未确认前不得进入阶段 2。
 
-当前状态：阶段 1 实现完成；首轮 Actions 构建失败（gradlew 无执行权限）已修复，等待用户重新 push 验证构建、确认并 commit 后进入阶段 2
+当前状态：阶段 1 实现完成；首跑 gradlew 权限失败已修复（chmod +x + LF）；二跑编译失败已修复（CustomPacketPayload 改为 Minecraft 原生包 `net.minecraft.network.protocol.common.custom`），等待用户重新 push 验证构建、确认并 commit 后进入阶段 2
 
 ### 阶段 2：适用区域和状态机
 
