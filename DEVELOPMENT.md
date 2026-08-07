@@ -167,26 +167,28 @@ AI 提问清单（用户检查并回答）：
 - [x] 实现进入、保持、离开状态。（`region.RegionStateMachine`：INACTIVE/ACTIVE + entered/left 转换事件）
 - [x] 实现离开方块约 0.3 秒的计时。（`region.SurfaceContactTimer`：6 tick 宽限期，超过进入 FREE）
 - [x] 实现状态清理。（`RegionStateMachine.reset()`，供死亡/重生/传送/维度切换调用，不留残留）
+- [x] 实现游戏内调试观察挂接。（`region.RegionDebugTicker`：服务端每 tick 驱动状态机，进入/离开/心跳日志（心跳 5 秒一次），维度切换与死亡重生自动 reset，仅 Debug 开启时输出，用于 PRD 3.1 游戏内验收）
 
 检查：
 
 - [x] 检查边界值 `8000`。（逻辑测试覆盖 8000.0/7999.999/高负值）
 - [x] 检查维度切换。（逻辑测试覆盖 主世界↔deep_space↔末地）
-- [x] 检查死亡、重生和传送。（`reset()` 已实现并测试；游戏内事件挂钩在后续阶段接入，届时由用户实际游戏验证）
+- [x] 检查死亡、重生和传送。（`reset()` 已实现并测试；游戏内事件挂钩已接入 `RegionDebugTicker`（`PlayerEvent.PlayerChangedDimensionEvent` / `PlayerEvent.Clone` / `PlayerEvent.PlayerLoggedOutEvent`），用户实际游戏验证通过）
 - [x] 检查跨区时状态是否残留。（逻辑测试覆盖跨 Y=8000 边界与 reset 清理）
 
 测试说明：
 
 - 设备内存不足，不在设备上编译/运行。逻辑测试已写入 `src/logictest/java/dev/cosmonauticsroll/test/RegionLogicTest.java`（纯逻辑 main，独立 sourceSet，不占用 Gradle test 任务），由 GitHub Actions 的 `runLogicTests` 任务（`./gradlew build runLogicTests`）执行；实际游戏由用户按阶段检查清单验证。
 - 2026-08-07 首跑：`runLogicTests` 50/50 全部通过；但 Gradle `test` 任务因 src/test 下无 JUnit 测试而失败，已将逻辑测试移到独立 sourceSet `src/logictest` 修复，`test` 任务恢复 NO-SOURCE。
+- 2026-08-09 游戏内验收：用户按 PRD 3.1 清单在测试机验证（`/cosmonauticsroll debug on` + `[Debug]` 日志观察），8 项全部通过（见第 10.1 节验证记录）。逻辑测试 50 个断言分布：主世界规则 8、深空规则 5、组合规则 4、状态机 15、跨边界 4、维度切换 5、0.3s 计时器 9。
 
 出口条件：
 
-- 状态机逻辑清晰且没有已知边界 BUG。（逻辑测试全绿待 CI 执行确认；静态检查通过）
-- 用户确认并 commit。（待用户执行）
+- 状态机逻辑清晰且没有已知边界 BUG。（逻辑测试 50/50 通过：GitHub Actions `runLogicTests`）
+- 用户确认并 commit。（游戏内验收已通过：用户 2026-08-09 在测试机按 PRD 3.1 清单逐项验证全部通过；commit 待用户执行）
 - 未确认前不得进入阶段 3。
 
-当前状态：实现完成，逻辑测试已写入并配置 CI 执行（`runLogicTests`）；等待用户 push 触发 Actions 验证构建与逻辑测试、按清单实际游戏验证、确认并 commit 后进入阶段 3
+当前状态：阶段 2 完成（逻辑测试 50/50 通过、Actions 构建通过、用户游戏内验收全部通过）；等待用户 commit（阶段2收尾）后进入阶段 3。
 
 ### 阶段 3：脚部表面检测和基础方向
 
@@ -408,16 +410,20 @@ AI 提问清单（用户检查并回答）：
 当前阶段：
 
 ```text
-阶段 2：适用区域和状态机（实现完成，测试已写入并配置 CI 执行）
+阶段 2：适用区域和状态机（已完成：全部验收通过，等待用户 commit）
 ```
 
 当前状态：
 
 ```text
-阶段 2 实现完成：区域规则、状态机、0.3 秒计时器均已实现；
-逻辑测试 50/50 通过（GitHub Actions runLogicTests）。
-首跑 Gradle test 任务因 src/test 无 JUnit 测试失败，已改为独立 sourceSet src/logictest 修复。
-等待用户重新 push 触发 Actions 验证、实际游戏验证、确认并 commit 后进入阶段 3。
+阶段 2 完成：区域规则、状态机、0.3 秒计时器均已实现并验收；
+逻辑测试 50/50 通过（GitHub Actions runLogicTests），Actions 构建通过；
+新增 region.RegionDebugTicker 游戏内调试观察挂接
+（进入/离开/心跳日志、维度切换与死亡重生自动 reset，仅 Debug 开启时输出）；
+用户 2026-08-09 在测试机按 PRD 3.1 清单游戏内验证 8 项全部通过
+（详见第 10.1 节验证记录：逻辑测试覆盖明细、游戏内 8 步验收表、边界情况审查）；
+DEVELOPMENT.md 第 10.1 节与 PRD.md 3.1 均已完成勾选；
+等待用户 commit（阶段2收尾）后进入阶段 3。
 ```
 
 已确认：
@@ -492,13 +498,47 @@ AI 从源码确认的接口（记录，供后续阶段使用）：
 
 | 编号 | 检查内容（PRD 原文要点） | 验收模式 | 状态 |
 |---|---|---|---|
-| 3.1-1 | 实现主世界判断 | S+D | [ ] |
-| 3.1-2 | 碰撞箱中心 Y 坐标 `>= 8000` 判断 | D | [ ] |
-| 3.1-3 | 实现 `rocketnautics:deep_space` 维度判断 | S | [ ] |
-| 3.1-4 | 给其他维度和高度保留后续扩展接口 | S | [ ] |
-| 3.1-5 | 处理进入、持续处于、离开适用区域三种状态 | S | [ ] |
-| 3.1-6 | 处理跨越 Y=8000 边界时的状态清理 | D | [ ] |
-| 3.1-验收 | 低于 8000 不启用；达到 8000 启用；deep_space 启用且不依赖 Y；其他维度不启用；进出区域不残留旧旋转状态 | S+D | [ ] |
+| 3.1-1 | 实现主世界判断 | S+D | [x] |
+| 3.1-2 | 碰撞箱中心 Y 坐标 `>= 8000` 判断 | D | [x] |
+| 3.1-3 | 实现 `rocketnautics:deep_space` 维度判断 | S | [x] |
+| 3.1-4 | 给其他维度和高度保留后续扩展接口 | S | [x] |
+| 3.1-5 | 处理进入、持续处于、离开适用区域三种状态 | S | [x] |
+| 3.1-6 | 处理跨越 Y=8000 边界时的状态清理 | D | [x] |
+| 3.1-验收 | 低于 8000 不启用；达到 8000 启用；deep_space 启用且不依赖 Y；其他维度不启用；进出区域不残留旧旋转状态 | S+D | [x] |
+
+> **验证记录（2026-08-09，用户测试机游戏内验证 + GitHub Actions 逻辑测试，全部通过）**
+>
+> **一、逻辑测试覆盖明细**（`src/logictest/.../RegionLogicTest.java`，共 50 个断言，由 Actions `runLogicTests` 执行，输出 50/50 [PASS]）
+>
+> | 测试方法 | 覆盖内容 | 断言数 |
+> |---|---|---|
+> | `testOverworldRule` | 主世界 Y=8000 启用 / 8000.001 启用 / 7999.999 不启用 / 0 不启用 / 高负值不启用；下界 8000 不启用、末地 8000 不启用（维度约束） | 8 |
+> | `testDeepSpaceRule` | deep_space Y=0 / 负 / 100000 均启用（不依赖 Y）；`rocketnautics:moon` 不启用；主世界不启用 | 5 |
+> | `testCompositeRule` | 默认 OR 组合：主世界高空启用、deep_space 启用、主世界低空不启用、其他维度不启用 | 4 |
+> | `testStateMachine` | 初始 INACTIVE；进入→ACTIVE+entered；保持无转换事件；deep_space 保持无进入事件（维度内互切）；离开→INACTIVE+left；区域外保持无事件；再次进入 entered；reset 后 INACTIVE 且清空转换标记 | 15 |
+> | `testBoundaryCrossing` | 高空 ACTIVE → 跨 7999.9 left=true+INACTIVE → 跨回 8000 entered=true（跨 Y=8000 边界状态清理） | 4 |
+> | `testDimensionSwitch` | 主世界高空→deep_space 保持 ACTIVE 无转换事件；→末地 left+INACTIVE；末地→deep_space entered | 5 |
+> | `testSurfaceContactTimer` | 接触→CONTACTED；持续接触保持；离开第 1–6 tick 均 RECENTLY_LEFT（0.3s 宽限）；第 7 tick FREE；重新接触归零；reset 归零 | 9 |
+>
+> **二、游戏内验收步骤表**（S 模式，测试机实际执行，`/cosmonauticsroll debug on` 后观察 `run/logs/latest.log` 的 `[Debug]` 行）
+>
+> | 步骤 | 操作 | 预期日志 | 结果 |
+> |---|---|---|---|
+> | 1 | 进入主世界站地面（y<8000） | 心跳 `区域心跳：state=INACTIVE` | ✅ |
+> | 2 | `/tp @s ~ 8000 ~`（y≥8000） | `区域 >> 进入：dim=minecraft:overworld y=8000.0 ...`，之后心跳 `state=ACTIVE` | ✅ |
+> | 3 | 降回 y<8000 | `区域 << 离开：...`，之后心跳 `state=INACTIVE` | ✅ |
+> | 4 | 传送至 deep_space 任意 y（如 y=100） | 心跳 `state=ACTIVE`（不依赖 Y） | ✅ |
+> | 5 | 传送至末地 / 下界 | 心跳 `state=INACTIVE` | ✅ |
+> | 6 | deep_space 直接传送回主世界 y=9000 | 先 `区域 reset：... reason=维度切换`，再 `区域 >> 进入`（无残留状态） | ✅ |
+> | 7 | 死亡重生 | `区域 reset：... reason=死亡重生` | ✅ |
+> | 8 | `/cosmonauticsroll debug off` | `[Debug]` 日志停止输出（确认调试开关不影响正常游戏） | ✅ |
+>
+> **三、审查中额外确认的边界情况**
+> - 0.3 秒计时：`LEAVE_GRACE_TICKS=6`（20 tick/s），离开第 1–6 tick 为 `RECENTLY_LEFT`、第 7 tick（0.35s）进入 `FREE`，与 PRD 2.3「约 0.3 秒」一致（测试 9 断言覆盖）。
+> - 状态机转换标记生命周期：`entered()/left()` 在每次 `update()` 开头清零、只反映本次 update，防止跨 tick 误触发旋转初始化/清理。
+> - 维度互切（主世界高空↔deep_space）不产生 entered/left 事件：两者同属 ACTIVE，仅在真正进出适用区域时触发，避免假转换。
+> - debug 关闭时 `RegionDebugTicker` 零副作用（开头直接 return，不创建状态机实例、不输出日志）；玩家登出时清理实例防内存堆积。
+> - `RegionDebugTicker` 仅用于 Debug 验收观察；阶段 3 起正式脚部检测/旋转逻辑自挂 ticker，与验收工具解耦（见阶段 3 实现说明）。
 
 ### 10.2 阶段 3 → PRD 3.2 脚部表面检测
 
