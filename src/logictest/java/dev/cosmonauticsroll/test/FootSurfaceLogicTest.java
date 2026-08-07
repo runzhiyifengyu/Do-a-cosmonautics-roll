@@ -244,7 +244,7 @@ public final class FootSurfaceLogicTest {
         Vec3d dir = new Vec3d(1, 1, 0);
         FootSurfaceResult r = FootSurfaceResult.singleDirection(dir);
         check("任意方向 SINGLE", r.isSingle());
-        check("任意方向归一化", r.normal().length() == 1.0);
+        check("任意方向归一化", Math.abs(r.normal().length() - 1.0) < 1e-9);
         check("任意方向方向正确", r.normal().equals(new Vec3d(1, 1, 0).normalize()));
 
         boolean threw = false;
