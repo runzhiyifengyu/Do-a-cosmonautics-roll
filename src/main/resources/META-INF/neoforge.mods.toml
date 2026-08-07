@@ -24,3 +24,10 @@ Rotates the player's body and view to align with standing surfaces (floor, wall,
     versionRange="${minecraft_version_range}"
     ordering="NONE"
     side="BOTH"
+
+[[dependencies.${mod_id}]]
+    modId="sable"
+    type="optional"
+    versionRange="[2.0.3,)"
+    ordering="NONE"
+    side="BOTH"

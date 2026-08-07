@@ -58,6 +58,27 @@ public final class Vec3d {
   }
 
   @Override
+  public boolean equals(Object o) {
+    if (this == o) {
+      return true;
+    }
+    if (!(o instanceof Vec3d other)) {
+      return false;
+    }
+    return Double.compare(x, other.x) == 0
+        && Double.compare(y, other.y) == 0
+        && Double.compare(z, other.z) == 0;
+  }
+
+  @Override
+  public int hashCode() {
+    int result = Double.hashCode(x);
+    result = 31 * result + Double.hashCode(y);
+    result = 31 * result + Double.hashCode(z);
+    return result;
+  }
+
+  @Override
   public String toString() {
     return String.format("(%.3f, %.3f, %.3f)", x, y, z);
   }

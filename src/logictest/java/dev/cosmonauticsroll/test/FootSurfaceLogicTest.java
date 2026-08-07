@@ -36,6 +36,8 @@ public final class FootSurfaceLogicTest {
         testRotationFollowsBody();
         testOnlyFeetSampled();
         testLayout();
+        testVec3dMath();
+        testContinuousDirection();
 
         System.out.println("----------------------------------------");
         System.out.println("通过: " + passed + "  失败: " + failed);
@@ -88,7 +90,7 @@ public final class FootSurfaceLogicTest {
                 FootSamplingLayout.rectangle(), ground());
         FootSurfaceResult r = detector.detect(new Vec3d(0, 0.1, 0), UP, FORWARD);
         check("地面站立 SINGLE", r.isSingle());
-        check("地面法线 UP", r.normal() == SurfaceNormal.UP);
+        check("地面法线 UP", r.normal().equals(SurfaceNormal.UP.vector()));
     }
 
     /** PRD 3.2-6：墙面 → 统一方向表示 EAST（身体横着贴墙）。 */
@@ -99,7 +101,7 @@ public final class FootSurfaceLogicTest {
         // 身体 up 朝向 +X（横着站在东墙上），脚底中心贴墙
         FootSurfaceResult r = detector.detect(new Vec3d(0, 0, 0), new Vec3d(1, 0, 0), FORWARD);
         check("墙面站立 SINGLE", r.isSingle());
-        check("墙面法线 EAST", r.normal() == SurfaceNormal.EAST);
+        check("墙面法线 EAST", r.normal().equals(SurfaceNormal.EAST.vector()));
     }
 
     /** PRD 3.2-6：天花板 → 统一方向表示 DOWN（身体倒立）。 */
@@ -109,7 +111,7 @@ public final class FootSurfaceLogicTest {
                 FootSamplingLayout.rectangle(), ceiling());
         FootSurfaceResult r = detector.detect(new Vec3d(0, 10.1, 0), new Vec3d(0, -1, 0), FORWARD);
         check("天花板站立 SINGLE", r.isSingle());
-        check("天花板法线 DOWN", r.normal() == SurfaceNormal.DOWN);
+        check("天花板法线 DOWN", r.normal().equals(SurfaceNormal.DOWN.vector()));
     }
 
     /**
@@ -137,7 +139,7 @@ public final class FootSurfaceLogicTest {
         // 脚底中心在边缘外侧：x 范围约 0.85~1.35，部分点悬空
         FootSurfaceResult r = detector.detect(new Vec3d(1.1, 0.1, 0), UP, FORWARD);
         check("边缘部分接触仍 SINGLE", r.isSingle());
-        check("边缘法线 UP", r.normal() == SurfaceNormal.UP);
+        check("边缘法线 UP", r.normal().equals(SurfaceNormal.UP.vector()));
     }
 
     /** PRD 3.2：无表面 → NONE（太空/自由状态）。 */
@@ -163,7 +165,7 @@ public final class FootSurfaceLogicTest {
 
         // 身体横过来贴墙：检测区域随身体旋转，采样点下沉进墙内 → EAST
         FootSurfaceResult rotated = detector.detect(footCenter, new Vec3d(1, 0, 0), FORWARD);
-        check("身体转向墙后检测到 EAST", rotated.isSingle() && rotated.normal() == SurfaceNormal.EAST);
+        check("身体转向墙后检测到 EAST", rotated.isSingle() && rotated.normal().equals(SurfaceNormal.EAST.vector()));
 
         // 身体竖直：采样点沿 -Y 下沉（x=0 不在墙内）→ NONE
         FootSurfaceResult upright = detector.detect(footCenter, UP, FORWARD);
@@ -217,6 +219,41 @@ public final class FootSurfaceLogicTest {
             threw = true;
         }
         check("null query 被拒绝", threw);
+    }
+
+    /** Vec3d 数学：加减/缩放/点积/叉积/归一化/equals。 */
+    private static void testVec3dMath() {
+        System.out.println("-- Vec3d 数学 --");
+        Vec3d a = new Vec3d(1, 2, 3);
+        Vec3d b = new Vec3d(4, 5, 6);
+        check("加法", a.add(b).equals(new Vec3d(5, 7, 9)));
+        check("减法", b.subtract(a).equals(new Vec3d(3, 3, 3)));
+        check("缩放", a.scale(2).equals(new Vec3d(2, 4, 6)));
+        check("点积", a.dot(b) == 1 * 4 + 2 * 5 + 3 * 6);
+        check("叉积", a.cross(b).equals(new Vec3d(2 * 6 - 3 * 5, 3 * 4 - 1 * 6, 1 * 5 - 2 * 4)));
+        check("归一化长度=1", Math.abs(a.normalize().length() - 1.0) < 1e-9);
+        check("equals 相同值", new Vec3d(1, 2, 3).equals(a));
+        check("equals 不同值", !new Vec3d(1, 2, 4).equals(a));
+        check("hashCode 一致", new Vec3d(1, 2, 3).hashCode() == a.hashCode());
+    }
+
+    /** 连续方向（物理化方块/子世界）：singleDirection 归一化、null 拒绝。 */
+    private static void testContinuousDirection() {
+        System.out.println("-- 连续方向（子世界） --");
+        // 任意方向（非六轴向）：如 45° 斜向
+        Vec3d dir = new Vec3d(1, 1, 0);
+        FootSurfaceResult r = FootSurfaceResult.singleDirection(dir);
+        check("任意方向 SINGLE", r.isSingle());
+        check("任意方向归一化", r.normal().length() == 1.0);
+        check("任意方向方向正确", r.normal().equals(new Vec3d(1, 1, 0).normalize()));
+
+        boolean threw = false;
+        try {
+            FootSurfaceResult.singleDirection(null);
+        } catch (IllegalArgumentException e) {
+            threw = true;
+        }
+        check("singleDirection(null) 被拒绝", threw);
     }
 
     private static void check(String name, boolean condition) {

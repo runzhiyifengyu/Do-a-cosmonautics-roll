@@ -7,6 +7,7 @@ import dev.cosmonauticsroll.debug.Debug;
 import dev.cosmonauticsroll.detect.FootSamplingLayout;
 import dev.cosmonauticsroll.detect.FootSurfaceDetector;
 import dev.cosmonauticsroll.detect.LevelSurfaceQuery;
+import dev.cosmonauticsroll.detect.SableSubLevelDetector;
 import dev.cosmonauticsroll.region.RegionStateMachine.RegionState;
 
 import net.minecraft.core.BlockPos;
@@ -108,13 +109,23 @@ public final class RegionDebugTicker {
             double yawRad = Math.toRadians(player.getYRot());
             Vec3d bodyForward = new Vec3d(-Math.sin(yawRad), 0, Math.cos(yawRad));
 
-            SurfaceQuery query = new LevelSurfaceQuery(level);
-            FootSurfaceDetector detector = new FootSurfaceDetector(
-                    FootSamplingLayout.rectangle(), query);
-            FootSurfaceResult result = detector.detect(footCenter, bodyUp, bodyForward);
+            // 组合检测：Sable 子世界（物理化方块）优先，静态方块兜底。
+            Vec3d subLevelDir = SableSubLevelDetector.detectStandingDirection(player);
+            FootSurfaceResult result;
+            String source;
+            if (subLevelDir != null) {
+                result = FootSurfaceResult.singleDirection(subLevelDir);
+                source = "sublevel";
+            } else {
+                SurfaceQuery query = new LevelSurfaceQuery(level);
+                FootSurfaceDetector detector = new FootSurfaceDetector(
+                        FootSamplingLayout.rectangle(), query);
+                result = detector.detect(footCenter, bodyUp, bodyForward);
+                source = "block";
+            }
 
-            Debug.log("脚部检测：result={} footCenter=({},{},{}) bodyUp={} bodyForward={} player={}",
-                    result, format(footCenter.x), format(footCenter.y), format(footCenter.z),
+            Debug.log("脚部检测：result={} source={} footCenter=({},{},{}) bodyUp={} bodyForward={} player={}",
+                    result, source, format(footCenter.x), format(footCenter.y), format(footCenter.z),
                     bodyUp, bodyForward, player.getGameProfile().getName());
             logFootBlockDetail(level, footCenter, bodyUp, bodyForward);
         } catch (Exception e) {

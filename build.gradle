@@ -26,7 +26,9 @@ sourceSets.main.resources {
 }
 
 repositories {
-    // Add here additional repositories if required by some of the dependencies below.
+    // Sable（Cosmonautics 物理化方块引擎）可选编译依赖：仅编译期引用，
+    // 运行期由用户安装的 Cosmonautics/Sable 提供；缺失时反射降级（见 SableSubLevelDetector）。
+    maven { url 'https://maven.ryanhcode.dev/releases' }
 }
 
 base {
@@ -107,6 +109,12 @@ dependencies {
     // And its provides the option to then use net.minecraft as the group, and one of; client, server or joined as the module name, plus the game version as version.
     // For all intends and purposes: You can treat this dependency as if it is a normal library you would use.
     implementation "net.neoforged:neoforge:${neo_version}"
+
+    // Sable（Cosmonautics 物理化方块引擎）可选依赖：编译期引用（反射调用），
+    // 运行期不内嵌、不强制；用户未安装时 SableSubLevelDetector 反射失败并降级为纯方块检测。
+    compileOnly "dev.ryanhcode.sable:sable-neoforge-${minecraft_version}:2.0.3"
+    // 开发运行环境（runClient/runServer）本地加载 Sable，便于测试物理化方块表面检测。
+    localRuntime "dev.ryanhcode.sable:sable-neoforge-${minecraft_version}:2.0.3"
 
     // Example optional mod dependency with JEI
     // The JEI API is declared for compile time use, while the full JEI artifact is used at runtime
