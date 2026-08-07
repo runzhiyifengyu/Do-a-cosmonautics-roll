@@ -56,6 +56,10 @@ runs {
         // Please read: https://stackoverflow.com/questions/2031163/when-to-use-the-different-log-levels
         systemProperty 'forge.logging.console.level', 'debug'
 
+        // DEBUG 调试功能：开发运行环境（runClient/runServer 等）默认开启，
+        // 生产发布不受影响（用户运行模组时默认关闭，可在游戏内用命令或 -D 参数开启）。
+        systemProperty 'cosmonauticsroll.debug', 'true'
+
         workingDirectory project.layout.projectDirectory.dir('run').dir(name)
 
         modSource project.sourceSets.main

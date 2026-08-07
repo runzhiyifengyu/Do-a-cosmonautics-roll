@@ -2,6 +2,8 @@ package dev.cosmonauticsroll;
 
 import com.mojang.logging.LogUtils;
 
+import dev.cosmonauticsroll.debug.DebugCommand;
+
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.common.Mod;
 
@@ -15,7 +17,8 @@ import org.slf4j.Logger;
  * （地面/墙面/天花板）旋转，并与 Do a Barrel Roll、Cosmonautics、Aeronautics
  * 兼容。本模组不改变重力大小，只负责方向、姿态和旋转表现。</p>
  *
- * <p>阶段 1：仅项目骨架。事件、Mixin 与网络注册在后续阶段加入。</p>
+ * <p>阶段 1：项目骨架 + DEBUG 调试基础设施（开关、日志、游戏内命令）。
+ * 事件、Mixin 与网络注册在后续阶段加入。</p>
  */
 @Mod(CosmonauticsRoll.MODID)
 public class CosmonauticsRoll {
@@ -32,6 +35,7 @@ public class CosmonauticsRoll {
      * @param modEventBus 模组事件总线，后续阶段用于注册 DeferredRegister 与事件监听
      */
     public CosmonauticsRoll(IEventBus modEventBus) {
-        // 阶段 1：仅骨架。
+        // DEBUG 调试命令注册（/cosmonauticsroll debug on|off|status）。
+        DebugCommand.register();
     }
 }
