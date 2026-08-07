@@ -110,11 +110,15 @@ dependencies {
     // For all intends and purposes: You can treat this dependency as if it is a normal library you would use.
     implementation "net.neoforged:neoforge:${neo_version}"
 
-    // Sable（Cosmonautics 物理化方块引擎）可选依赖：编译期引用（反射调用），
-    // 运行期不内嵌、不强制；用户未安装时 SableSubLevelDetector 反射失败并降级为纯方块检测。
-    compileOnly "dev.ryanhcode.sable:sable-neoforge-${minecraft_version}:2.0.3"
-    // 开发运行环境（runClient/runServer）本地加载 Sable，便于测试物理化方块表面检测。
-    localRuntime "dev.ryanhcode.sable:sable-neoforge-${minecraft_version}:2.0.3"
+    // Sable（Cosmonautics 物理化方块引擎）：SableSubLevelDetector 通过反射访问
+    // （Class.forName），编译期不需要 Sable 类在 classpath，故不加 compileOnly。
+    // localRuntime 仅用于开发运行环境（runClient/runServer）本地加载 Sable 本体：
+    // transitive=false 避免解析其传递依赖（veil/create/ponder/flywheel 等依赖地狱）；
+    // 开发环境缺 veil 时 Sable 类加载失败 → 反射降级为纯方块检测（预期行为）；
+    // 用户测试机安装完整 Cosmonautics（含 Sable+veil+companion）时反射成功。
+    localRuntime("dev.ryanhcode.sable:sable-neoforge-${minecraft_version}:2.0.3") {
+        transitive = false
+    }
 
     // Example optional mod dependency with JEI
     // The JEI API is declared for compile time use, while the full JEI artifact is used at runtime

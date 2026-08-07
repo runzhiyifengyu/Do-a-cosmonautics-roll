@@ -199,7 +199,7 @@ AI 提问清单（用户检查并回答）：
 - [ ] 识别单一表面。（`FootSurfaceResult.SINGLE`，合并同方向）
 - [ ] 拒绝多个不同方向表面。（`FootSurfaceResult.MULTIPLE`）
 - [ ] 建立统一方向表示。（`api.detect.SurfaceNormal` 六轴向枚举 + `FootSurfaceResult` 连续方向 `Vec3d` 法线）
-- [x] 支持物理化方块（Sable 子世界）表面方向。（`detect.SableSubLevelDetector`：反射调用 `Sable.HELPER.getTrackingSubLevel(entity)` → `subLevel.logicalPose().orientation()` 旋转 (0,1,0) 得站立方向；Sable 未装/API 变化时反射失败降级为纯方块检测，不崩溃；build.gradle `compileOnly` + neoforge.mods.toml `optional` 依赖 `dev.ryanhcode.sable:sable-neoforge-1.21.1:2.0.3`（maven.ryanhcode.dev/releases，坐标已验证））
+- [x] 支持物理化方块（Sable 子世界）表面方向。（`detect.SableSubLevelDetector`：反射调用 `Sable.HELPER.getTrackingSubLevel(entity)` → `subLevel.logicalPose().orientation()` 旋转 (0,1,0) 得站立方向；Sable 未装/API 变化时反射失败降级为纯方块检测，不崩溃；**依赖策略：SableSubLevelDetector 用反射（Class.forName），编译期不需要 Sable 类在 classpath，故不加 compileOnly；仅 localRuntime（transitive=false，只拿 Sable 本体 jar，避免 veil/create/ponder/flywheel 传递依赖地狱）用于开发环境**；neoforge.mods.toml 声明 sable optional 依赖 `[2.0.3,)`）
 
 检查：
 
@@ -213,6 +213,7 @@ AI 提问清单（用户检查并回答）：
 - 纯逻辑测试 `FootSurfaceLogicTest`（46 个断言，11 个用例：原 33 断言 9 用例 + Vec3d 数学 9 断言 + 连续方向 4 断言），与阶段 2 的 `RegionLogicTest`（50 个断言）由统一入口 `LogicTestSuite` 运行（`runLogicTests`，共 96 个断言）。
 - 2026-08-09 Actions 首跑：`compileJava` 失败——`Level.getBlockCollisionShape(BlockPos)` 在 1.21.1 不存在，已改为 `level.getBlockState(pos).getCollisionShape(level, pos)`（`BlockState.getCollisionShape(BlockGetter, BlockPos)` 稳定 API）。
 - 2026-08-09 Actions 二跑：**编译通过 + `runLogicTests` 83/83 全部 [PASS]**（BUILD SUCCESSFUL，当时测试为 33+50）。
+- 2026-08-09 Actions 三跑失败：Sable `compileOnly` 的传递依赖 `foundry.veil:veil-neoforge-1.21.1:4.1.4` 无法解析（仓库未配 + 依赖地狱）。**修复：利用 SableSubLevelDetector 纯反射特性，删除 compileOnly，localRuntime 设 `transitive=false`（只拿 Sable 本体 jar）**——编译期不再解析任何 Sable 传递依赖；开发环境缺 veil 时反射降级（预期）；用户测试机完整 Cosmonautics 环境反射成功。
 - 2026-08-09 游戏内验收发现：物理化方块（Sable 子世界）在 y=8000 处是 `void_air`（静态方块世界为空），`LevelSurfaceQuery` 查不到 → NONE。经用户确认方案 A：加 Sable 可选依赖 + `SableSubLevelDetector` 反射检测子世界方向（已实现，见上）。
 - 设备端 IDE 诊断对本次会话新建的纯逻辑文件跨类引用报 `Cannot resolve symbol`（CodeAssist 会话内新文件索引未更新，`find_symbol` 可定位、logictest 引用正常、代码经人工逐行核对）；以 GitHub Actions 编译为准。
 - 楼梯/斜面 45° 法线暂按轴向近似（阶段 5 楼梯专用逻辑处理）；`LevelSurfaceQuery` 对斜面可能返回 MULTIPLE 而保守不站立。
@@ -431,11 +432,11 @@ AI 提问清单（用户检查并回答）：
 脚底采样点布局（跟随身体方向旋转）、六轴向统一方向表示（SurfaceNormal）、
 连续方向法线（FootSurfaceResult + Vec3d，支持任意 3D 方向）、
 表面查询接口 + MC 适配层（LevelSurfaceQuery）、检测器（NONE/SINGLE/MULTIPLE）、
-Sable 子世界检测（SableSubLevelDetector，方案 A：反射 + 可选依赖，
+Sable 子世界检测（SableSubLevelDetector，方案 A：纯反射 + localRuntime(transitive=false)，
 物理化方块表面方向，缺失时降级不崩溃）。
 RegionDebugTicker 已扩展：脚部检测日志（source=sublevel|block）。
-等待用户重新 push 触发 Actions 三跑（预期 96/96）、
-按阶段 3 检查清单游戏内验收（含物理化方块）、确认并 commit 后进入阶段 4。
+Actions 三跑因 Sable 传递依赖 veil 失败，已修复（删除 compileOnly，localRuntime transitive=false），
+待重新 push 四跑（预期 96/96）、游戏内验收（含物理化方块）、确认并 commit 后进入阶段 4。
 ```
 
 已确认：
