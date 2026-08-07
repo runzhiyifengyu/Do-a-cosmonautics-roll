@@ -1,0 +1,12 @@
+version = 2
+
+[module]
+type = "java-lib"
+name = "main"
+languageLevel = "JAVA_21"
+output = "build/classes"
+
+[sourceSets.main]
+scope = "IMPLEMENTATION"
+java = ["java"]
+resources = ["resources"]

@@ -1,0 +1,37 @@
+package dev.cosmonauticsroll;
+
+import com.mojang.logging.LogUtils;
+
+import net.neoforged.bus.api.IEventBus;
+import net.neoforged.fml.common.Mod;
+
+import org.slf4j.Logger;
+
+/**
+ * Cosmonautics Roll 主模组类。
+ *
+ * <p>第一版为单人模组：在适用区域（主世界 Y &gt;= 8000 或
+ * {@code rocketnautics:deep_space}）内，让玩家身体与视角跟随脚部接触表面
+ * （地面/墙面/天花板）旋转，并与 Do a Barrel Roll、Cosmonautics、Aeronautics
+ * 兼容。本模组不改变重力大小，只负责方向、姿态和旋转表现。</p>
+ *
+ * <p>阶段 1：仅项目骨架。事件、Mixin 与网络注册在后续阶段加入。</p>
+ */
+@Mod(CosmonauticsRoll.MODID)
+public class CosmonauticsRoll {
+
+    /** 模组 id，与 {@code META-INF/neoforge.mods.toml} 中的 modId 一致。 */
+    public static final String MODID = "cosmonautics_roll";
+
+    /** 模组日志。 */
+    public static final Logger LOGGER = LogUtils.getLogger();
+
+    /**
+     * 模组加载入口。FML 会自动传入 mod 事件总线。
+     *
+     * @param modEventBus 模组事件总线，后续阶段用于注册 DeferredRegister 与事件监听
+     */
+    public CosmonauticsRoll(IEventBus modEventBus) {
+        // 阶段 1：仅骨架。
+    }
+}
