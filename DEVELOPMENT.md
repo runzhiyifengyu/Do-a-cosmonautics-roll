@@ -177,7 +177,8 @@ AI 提问清单（用户检查并回答）：
 
 测试说明：
 
-- 设备内存不足，不在设备上编译/运行。逻辑测试已写入 `src/test/java/dev/cosmonauticsroll/test/RegionLogicTest.java`（纯逻辑 main），由 GitHub Actions 通过新增的 `runLogicTests` 任务（`./gradlew build runLogicTests`）在 CI 上执行；实际游戏由用户按阶段检查清单验证。
+- 设备内存不足，不在设备上编译/运行。逻辑测试已写入 `src/logictest/java/dev/cosmonauticsroll/test/RegionLogicTest.java`（纯逻辑 main，独立 sourceSet，不占用 Gradle test 任务），由 GitHub Actions 的 `runLogicTests` 任务（`./gradlew build runLogicTests`）执行；实际游戏由用户按阶段检查清单验证。
+- 2026-08-07 首跑：`runLogicTests` 50/50 全部通过；但 Gradle `test` 任务因 src/test 下无 JUnit 测试而失败，已将逻辑测试移到独立 sourceSet `src/logictest` 修复，`test` 任务恢复 NO-SOURCE。
 
 出口条件：
 
@@ -413,11 +414,10 @@ AI 提问清单（用户检查并回答）：
 当前状态：
 
 ```text
-阶段 2 实现完成：区域规则（主世界 Y>=8000 / rocketnautics:deep_space）、
-状态机（进入/保持/离开 + reset 清理）、离开方块 0.3 秒计时器均已实现；
-逻辑测试已写入 src/test 并由 GitHub Actions 的 runLogicTests 任务执行。
-设备内存不足，不在设备上编译/运行。
-等待用户 push 触发 Actions 验证构建与逻辑测试、实际游戏验证、确认并 commit 后进入阶段 3。
+阶段 2 实现完成：区域规则、状态机、0.3 秒计时器均已实现；
+逻辑测试 50/50 通过（GitHub Actions runLogicTests）。
+首跑 Gradle test 任务因 src/test 无 JUnit 测试失败，已改为独立 sourceSet src/logictest 修复。
+等待用户重新 push 触发 Actions 验证、实际游戏验证、确认并 commit 后进入阶段 3。
 ```
 
 已确认：

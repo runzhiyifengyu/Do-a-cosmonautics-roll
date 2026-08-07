@@ -171,12 +171,21 @@ tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8' // Use the UTF-8 charset for Java compilation
 }
 
-// 设备上不编译/不运行（内存不足）；逻辑测试由 GitHub Actions 执行。
-// 运行 src/test 下的纯逻辑单元测试（无 Minecraft 依赖，不启动游戏）。
+// 纯逻辑单元测试（无 Minecraft 依赖，不启动游戏）放在独立 sourceSet：
+// 不占用 Gradle 的 test 任务（该任务对无 JUnit 测试的源码会失败），
+// 由 runLogicTests 任务（GitHub Actions 执行）专属编译并运行。
+sourceSets {
+    logictest {
+        java.srcDir 'src/logictest/java'
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += sourceSets.main.output
+    }
+}
+
 tasks.register('runLogicTests', JavaExec) {
     group = 'verification'
     description = 'Runs pure-logic unit tests (region state machine etc.) on the JVM without launching Minecraft.'
-    classpath = sourceSets.test.runtimeClasspath
+    classpath = sourceSets.logictest.runtimeClasspath
     mainClass = 'dev.cosmonauticsroll.test.RegionLogicTest'
 }
 
