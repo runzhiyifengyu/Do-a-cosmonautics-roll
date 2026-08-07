@@ -184,9 +184,9 @@ sourceSets {
 
 tasks.register('runLogicTests', JavaExec) {
     group = 'verification'
-    description = 'Runs pure-logic unit tests (region state machine etc.) on the JVM without launching Minecraft.'
+    description = 'Runs pure-logic unit tests (region state machine, foot surface detection) on the JVM without launching Minecraft.'
     classpath = sourceSets.logictest.runtimeClasspath
-    mainClass = 'dev.cosmonauticsroll.test.RegionLogicTest'
+    mainClass = 'dev.cosmonauticsroll.test.LogicTestSuite'
 }
 
 // IDEA no longer automatically downloads sources/javadoc jars for dependencies, so we need to explicitly enable the behavior.

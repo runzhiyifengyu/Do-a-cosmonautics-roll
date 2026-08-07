@@ -194,26 +194,33 @@ AI 提问清单（用户检查并回答）：
 
 目标：
 
-- [ ] 实现跟随身体方向的脚部检测。
-- [ ] 获取接触表面法线。
-- [ ] 识别单一表面。
-- [ ] 拒绝多个不同方向表面。
-- [ ] 建立统一方向表示。
+- [ ] 实现跟随身体方向的脚部检测。（`detect.FootSamplingLayout`（局部坐标采样点，随 bodyUp/bodyForward 旋转）+ `detect.FootSurfaceDetector`（核心），纯逻辑）
+- [ ] 获取接触表面法线。（`api.detect.SurfaceQuery` 接口 + `detect.LevelSurfaceQuery` MC 适配层（`Level.getBlockCollisionShape` → 最近面法线，轴向近似））
+- [ ] 识别单一表面。（`FootSurfaceResult.SINGLE`，合并同方向）
+- [ ] 拒绝多个不同方向表面。（`FootSurfaceResult.MULTIPLE`）
+- [ ] 建立统一方向表示。（`api.detect.SurfaceNormal` 六轴向枚举）
 
 检查：
 
-- [ ] 检查地面、墙面、天花板。
-- [ ] 检查墙角和边缘。
-- [ ] 检查身体旋转后的脚部位置。
-- [ ] 检查只碰到身体其他部位的情况。
+- [ ] 检查地面、墙面、天花板。（逻辑测试覆盖：UP/EAST/DOWN 站立）
+- [ ] 检查墙角和边缘。（逻辑测试覆盖：倾斜姿态横跨地面+墙 → MULTIPLE；边缘部分悬空仍 SINGLE）
+- [ ] 检查身体旋转后的脚部位置。（逻辑测试覆盖：单点布局，身体转向墙 → EAST，身体竖直 → NONE）
+- [ ] 检查只碰到身体其他部位的情况。（逻辑测试覆盖：采样点全部位于脚底矩形内，无头/躯干点）
+
+测试说明：
+
+- 纯逻辑测试 `FootSurfaceLogicTest`（33 个断言，9 个用例），与阶段 2 的 `RegionLogicTest`（50 个断言）由统一入口 `LogicTestSuite` 运行（`runLogicTests`，共 83 个断言）。
+- 设备端 IDE 诊断对本次会话新建的纯逻辑文件跨类引用报 `Cannot resolve symbol`（CodeAssist 会话内新文件索引未更新，`find_symbol` 可定位、logictest 引用正常、代码经人工逐行核对）；以 GitHub Actions 编译为准。
+- MC 适配层 `LevelSurfaceQuery` 依赖设备端无法解析的 MC 类，由 Actions 编译验证。
+- 楼梯/斜面 45° 法线暂按轴向近似（阶段 5 楼梯专用逻辑处理）；`LevelSurfaceQuery` 对斜面可能返回 MULTIPLE 而保守不站立。
 
 出口条件：
 
-- 单表面、无表面、多表面三类结果可区分。
-- 用户确认并 commit。
+- 单表面、无表面、多表面三类结果可区分。（逻辑测试已覆盖，待 Actions 执行确认）
+- 用户确认并 commit。（待执行）
 - 未确认前不得进入阶段 4。
 
-当前状态：未开始
+当前状态：实现完成（核心纯逻辑 + MC 适配层 + 逻辑测试 33 断言 + 统一测试入口）；等待用户 push 触发 Actions 验证编译与 `runLogicTests`（预期 83/83）、按检查清单游戏内验证、确认并 commit 后进入阶段 4。
 
 ### 阶段 4：平滑站立和表面行走
 
@@ -410,20 +417,19 @@ AI 提问清单（用户检查并回答）：
 当前阶段：
 
 ```text
-阶段 2：适用区域和状态机（已完成：全部验收通过，等待用户 commit）
+阶段 3：脚部表面检测和基础方向（实现完成，待 Actions 验证与游戏内验收）
 ```
 
 当前状态：
 
 ```text
-阶段 2 完成：区域规则、状态机、0.3 秒计时器均已实现并验收；
-逻辑测试 50/50 通过（GitHub Actions runLogicTests），Actions 构建通过；
-新增 region.RegionDebugTicker 游戏内调试观察挂接
-（进入/离开/心跳日志、维度切换与死亡重生自动 reset，仅 Debug 开启时输出）；
-用户 2026-08-09 在测试机按 PRD 3.1 清单游戏内验证 8 项全部通过
-（详见第 10.1 节验证记录：逻辑测试覆盖明细、游戏内 8 步验收表、边界情况审查）；
-DEVELOPMENT.md 第 10.1 节与 PRD.md 3.1 均已完成勾选；
-等待用户 commit（阶段2收尾）后进入阶段 3。
+阶段 3 实现完成：脚底采样点布局（跟随身体方向旋转）、六轴向统一方向表示、
+表面查询接口 + MC 适配层（getBlockCollisionShape → 最近面法线）、
+检测器（NONE/SINGLE/MULTIPLE 三类结果，合并同方向、拒绝多方向）。
+逻辑测试 FootSurfaceLogicTest 33 断言（地面/墙面/天花板/墙角 MULTIPLE/
+边缘部分接触/身体旋转跟随/只测脚部），与 RegionLogicTest 由 LogicTestSuite
+统一运行（runLogicTests，预期 83/83）。
+等待用户 push 触发 Actions 验证、按阶段 3 检查清单游戏内验证、确认并 commit 后进入阶段 4。
 ```
 
 已确认：
