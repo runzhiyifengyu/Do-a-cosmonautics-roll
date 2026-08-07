@@ -9,10 +9,13 @@ import dev.cosmonauticsroll.detect.FootSurfaceDetector;
 import dev.cosmonauticsroll.detect.LevelSurfaceQuery;
 import dev.cosmonauticsroll.region.RegionStateMachine.RegionState;
 
+import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.shapes.VoxelShape;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
@@ -89,7 +92,7 @@ public final class RegionDebugTicker {
         }
     }
 
-    /** 脚部表面检测日志：仅适用区域内玩家，每 1 秒输出一次。 */
+    /** 脚部表面检测日志：仅适用区域内玩家，每 1 秒输出一次（含采样点详情，用于定位 NONE）。 */
     private static void logFootDetection(ServerPlayer player) {
         try {
             Level level = player.level();
@@ -110,13 +113,45 @@ public final class RegionDebugTicker {
                     FootSamplingLayout.rectangle(), query);
             FootSurfaceResult result = detector.detect(footCenter, bodyUp, bodyForward);
 
-            Debug.log("脚部检测：result={} bodyUp={} bodyForward={} footY={} player={}",
-                    result, bodyUp, bodyForward, formatY(footCenter.y),
-                    player.getGameProfile().getName());
+            Debug.log("脚部检测：result={} footCenter=({},{},{}) bodyUp={} bodyForward={} player={}",
+                    result, format(footCenter.x), format(footCenter.y), format(footCenter.z),
+                    bodyUp, bodyForward, player.getGameProfile().getName());
+            logFootBlockDetail(level, footCenter, bodyUp, bodyForward);
         } catch (Exception e) {
             // 调试观察不应影响正常游戏：任何异常只记日志。
             Debug.log("脚部检测异常：{}", e.toString());
         }
+    }
+
+    /** 输出脚底中心下方方块与每个采样点的命中详情（定位 NONE 用）。 */
+    private static void logFootBlockDetail(Level level, Vec3d footCenter, Vec3d bodyUp, Vec3d bodyForward) {
+        Vec3d bodyDown = bodyUp.scale(-1.0).normalize();
+        // 脚底中心下沉 0.1 后的方块
+        Vec3d footSample = footCenter.add(bodyDown.scale(FootSurfaceDetector.DEFAULT_QUERY_OFFSET));
+        logBlockAt(level, "脚底中心下方", footSample);
+        // 每个采样点
+        FootSamplingLayout layout = FootSamplingLayout.rectangle();
+        for (int i = 0; i < layout.points().size(); i++) {
+            FootSamplingLayout.SamplePoint p = layout.points().get(i);
+            Vec3d sample = footCenter
+                    .add(p.worldOffset(bodyUp, bodyForward))
+                    .add(bodyDown.scale(FootSurfaceDetector.DEFAULT_QUERY_OFFSET));
+            logBlockAt(level, "采样点" + i, sample);
+        }
+    }
+
+    /** 输出单个点的方块信息：坐标、方块注册名、碰撞形状是否为空。 */
+    private static void logBlockAt(Level level, String label, Vec3d p) {
+        BlockPos pos = BlockPos.containing(p.x, p.y, p.z);
+        BlockState state = level.getBlockState(pos);
+        VoxelShape shape = state.getCollisionShape(level, pos);
+        Debug.log("  脚部采样[{}]：sample=({},{},{}) block={} pos={} collisionEmpty={}",
+                label, format(p.x), format(p.y), format(p.z),
+                state.getBlock().toString(), pos, shape.isEmpty());
+    }
+
+    private static String format(double v) {
+        return String.format("%.2f", v);
     }
 
     /** 维度切换：立即丢弃残留状态，重新进入时从 INACTIVE 开始。 */
