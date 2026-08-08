@@ -1,6 +1,8 @@
 # Do-a-Cosmonautics-roll PRD（产品需求）
 
 > 开发规则、开发分工、开发阶段、任务清单与进度记录见 [DEVELOPMENT.md](DEVELOPMENT.md)。
+> PRD 检查清单（逐项验收状态）见 [CHECKLIST.md](CHECKLIST.md)。
+> AI 实际操作记录见 [OPERATION_LOG.md](OPERATION_LOG.md)。
 > 本文件只描述产品目标、使用场景、功能需求与验收标准。
 
 ---
