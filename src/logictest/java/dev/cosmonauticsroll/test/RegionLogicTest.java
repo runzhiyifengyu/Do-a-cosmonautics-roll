@@ -1,5 +1,6 @@
 package dev.cosmonauticsroll.test;
 
+import dev.cosmonauticsroll.debug.RegionDebugConfig;
 import dev.cosmonauticsroll.region.DeepSpaceDimensionRule;
 import dev.cosmonauticsroll.region.OverworldAltitudeRule;
 import dev.cosmonauticsroll.region.RegionRules;
@@ -35,6 +36,7 @@ public final class RegionLogicTest {
         testBoundaryCrossing();
         testDimensionSwitch();
         testSurfaceContactTimer();
+        testRegionDebugThresholdOverride();
 
         System.out.println("----------------------------------------");
         System.out.println("通过: " + passed + "  失败: " + failed);
@@ -185,6 +187,33 @@ public final class RegionLogicTest {
         check("reset 后 ticks=0", timer.ticksSinceContact() == 0);
         check("reset 后再次离开第1tick RECENTLY_LEFT",
                 timer.update(false) == ContactState.RECENTLY_LEFT);
+    }
+
+    /** Debug 验收覆盖（阶段 5 验收手段）：主世界高度阈值可临时覆盖到低空。 */
+    private static void testRegionDebugThresholdOverride() {
+        System.out.println("-- Debug 区域高度阈值覆盖 --");
+        OverworldAltitudeRule rule = new OverworldAltitudeRule();
+        try {
+            // 默认（无覆盖）：低空不启用
+            check("默认 y=100 不启用", !rule.isActive("minecraft:overworld", 100.0));
+
+            // 覆盖到 0：低空启用、边界值 0 启用、负值不启用
+            RegionDebugConfig.setAltitudeThresholdOverride(0.0);
+            check("覆盖0 y=100 启用", rule.isActive("minecraft:overworld", 100.0));
+            check("覆盖0 y=0 启用", rule.isActive("minecraft:overworld", 0.0));
+            check("覆盖0 y=-1 不启用", !rule.isActive("minecraft:overworld", -1.0));
+
+            // 覆盖不影响其他维度约束
+            check("覆盖0 下界仍不启用", !rule.isActive("minecraft:the_nether", 100.0));
+
+            // 恢复默认：低空恢复不启用
+            RegionDebugConfig.setAltitudeThresholdOverride(null);
+            check("恢复默认 y=100 不启用", !rule.isActive("minecraft:overworld", 100.0));
+            check("恢复默认 y=8000 启用", rule.isActive("minecraft:overworld", 8000.0));
+        } finally {
+            // 全局静态状态清理：无论断言成败都恢复，避免影响后续测试/游戏
+            RegionDebugConfig.setAltitudeThresholdOverride(null);
+        }
     }
 
     private static void check(String name, boolean condition) {

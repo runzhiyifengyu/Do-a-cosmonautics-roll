@@ -7,6 +7,29 @@
 
 ---
 
+## 2026-08-11（阶段 5 补丁2：Debug 低空验收手段——主世界高度阈值覆盖命令）
+
+### 本次操作内容
+
+1. **背景**：游戏内验收发现 Y=8000 超出主世界建筑高度上限（-64~320），无法放置普通方块；物理化（Sable 子世界）楼梯走 sublevel 路径不触发楼梯 BlockState 逻辑。用户选方案 A（Debug 临时覆盖命令，低空验收）。
+2. **新增 `debug/RegionDebugConfig.java`**（纯逻辑、无 MC 依赖）：静态主世界高度阈值覆盖（null = 默认 8000），setter/getter。
+3. **修改 `region/OverworldAltitudeRule.java`**：`isActive` 在覆盖值非 null 时用覆盖值替代 8000（默认行为不变，不影响正常游戏；仅 Debug 验收可设）。
+4. **修改 `debug/DebugCommand.java`**：新增子命令 `/cosmonauticsroll debug region <高度>`（DoubleArgumentType，仅 Debug 开启时生效，否则提示先开 debug）、`/cosmonauticsroll debug region default`（恢复 8000）、`/cosmonauticsroll debug region`（查看当前覆盖状态）。
+5. **`RegionLogicTest` 新增 `testRegionDebugThresholdOverride`**（7 断言，finally 恢复全局状态）：默认低空不启用；覆盖 0 后 y=100/0 启用、y=-1 不启用；下界约束不变；恢复默认后低空不启用、y=8000 启用。RegionLogicTest 总 50→57 断言，LogicTestSuite 总 157+。
+6. **文档同步**：CHECKLIST.md 头部 Debug 功能说明新增区域高度覆盖条目；DEVELOPMENT.md 阶段 5 实现说明与当前状态补充低空验收手段（`debug on` + `debug region 0`，验收完 `region default` 恢复）。
+
+### 验证状态
+
+- 纯逻辑文件（RegionDebugConfig / OverworldAltitudeRule / RegionLogicTest）get_diagnostics 零错误；DebugCommand 仅已知会话假阳性（Brigadier/MC 符号），以 Actions 编译为准。
+- 未 push 验证；预期 compileJava 通过 + runLogicTests 157+ 全部通过。
+
+### 待办
+
+1. 用户 commit/push → Actions 验证。
+2. 低空游戏内验收（`/cosmonauticsroll debug on` + `/cosmonauticsroll debug region 0`）：原版/模组楼梯、上楼角度连续、楼梯边缘不抖、普通方块/半砖/活板门不误判；验收完 `/cosmonauticsroll debug region default` 恢复。
+
+---
+
 ## 2026-08-11（阶段 5 补丁1：Actions 两轮修复——import 缺失 + 测试用例 bug）
 
 ### 本次操作内容

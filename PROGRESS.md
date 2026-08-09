@@ -5,6 +5,25 @@
 
 ---
 
+## 2026-08-11（阶段 5 补丁2：Debug 低空验收手段）
+
+### 完成
+- **新增主世界高度阈值覆盖（D 模式验收手段）**：
+  - `debug/RegionDebugConfig`：纯逻辑静态配置（主世界高度阈值覆盖，null = 默认 8000）。
+  - `region/OverworldAltitudeRule`：读取覆盖值（默认行为不变）。
+  - `debug/DebugCommand`：新增 `/cosmonauticsroll debug region <高度>|default|无参`（仅 debug 开启时生效）。
+  - 背景：Y=8000 超出建筑高度上限（320），高空无法放方块验收楼梯；物理化楼梯走 sublevel 路径不触发楼梯 BlockState 逻辑 → 需低空搭普通楼梯验收。
+- **逻辑测试**：`RegionLogicTest` 新增覆盖用例（7 断言，finally 恢复全局状态），总 57 断言；LogicTestSuite 总 157+。
+
+### 状态
+- **阶段 5：实现完成 + 低空验收手段就绪，待 Actions 验证与游戏内验收**。
+
+### 待办（用户操作）
+1. commit/push → Actions（预期编译 OK + runLogicTests 157+ 全部通过）。
+2. 低空游戏内验收：`/cosmonauticsroll debug on` + `/cosmonauticsroll debug region 0` → 搭普通原版楼梯上行看 `source=stair` + `progress` 连续变化；验收完 `/cosmonauticsroll debug region default` 恢复 8000。
+
+---
+
 ## 2026-08-11（阶段 5 实现完成，待 Actions 验证与游戏内验收）
 
 ### 完成

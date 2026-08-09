@@ -300,7 +300,8 @@ AI 提问清单（用户检查并回答）：
 - 游戏内适配层：`detect/StairBlockQuery`（`isStair`：原版 `StairBlock` instanceof + 注册名含 `stair` + 标准三属性 shape/facing/half，PRD 3.4-1 识别原版与模组楼梯；`isOnSlope`：按 45° 斜面碰撞形状判定，容差覆盖 0.05 采样下沉，转角楼梯保守不按斜面处理；半砖/活板门等非楼梯方块不识别）、`detect/StairSurfaceResolver`（脚底 5 点斜面/台阶判定 + 墙面优先——非楼梯采样点命中水平法线时返回 null 走普通表面路径，PRD 3.4-4 区分正常上楼与进入墙面；调试日志 `楼梯：facing=... progress=...`）。
 - 检测链接入：`FootSurfaceResolver` 静态方块兜底先楼梯识别（source=stair，`Resolved` 携带 `StairProgress`），无楼梯命中再走普通表面合并（普通完整方块仍用普通表面判断）。
 - 旋转层：`SmoothStandingRotation.setStairTarget(StairProgress)`（楼梯边缘进度防抖：进度变化 < 0.05 不更新目标，PRD 3.4-5；reset 清除防抖状态）；`RotationTicker` 按 `resolved.stair != null` 走楼梯目标。
-- 逻辑测试 `StairLogicTest`（11 用例 30+ 断言：朝向/上升方向、站立方向连续倾斜、进度计算 0/0.4/1、平面→楼梯单调连续、多朝向冲突、无楼梯 null、进度防抖、平滑过渡、reset），LogicTestSuite 总 150+ 断言。
+- **Debug 低空验收手段（阶段 5 新增）**：`debug/RegionDebugConfig`（纯逻辑静态配置，主世界高度阈值覆盖）+ `DebugCommand` 新增 `debug region <高度>|default|无参` 子命令（仅 debug 开启时生效）——建筑高度上限 320，Y=8000 高空无法放置普通方块，楼梯验收需把阈值临时降到低空（如 0），验收完 `default` 恢复；`OverworldAltitudeRule` 读取覆盖值（默认仍 8000，不影响正常游戏）。
+- 逻辑测试 `StairLogicTest`（11 用例 30+ 断言：朝向/上升方向、站立方向连续倾斜、进度计算 0/0.4/1、平面→楼梯单调连续、多朝向冲突、无楼梯 null、进度防抖、平滑过渡、reset），`RegionLogicTest` 新增覆盖用例（7 断言：默认低空不启用、覆盖 0 后低空启用/边界 0 启用/负值不启用、下界约束不变、恢复默认生效），LogicTestSuite 总 157+ 断言。
 
 出口条件：
 
@@ -308,7 +309,7 @@ AI 提问清单（用户检查并回答）：
 - 用户确认并 commit。
 - 未确认前不得进入阶段 6。
 
-当前状态：**阶段 5 实现完成（待 Actions 验证 + 游戏内验收）**。实现完成 + 纯逻辑文件 get_diagnostics 零错误；MC 适配层仅已知会话索引假阳性；等待用户 push 后 Actions 验证（compileJava + runLogicTests 150+），随后用户游戏内验收（S+D：原版/模组楼梯、上楼角度连续、普通方块不误判、半砖/活板门不当作楼梯）。
+当前状态：**阶段 5 实现完成（待 Actions 验证 + 游戏内验收）**。实现完成 + 纯逻辑文件 get_diagnostics 零错误；MC 适配层仅已知会话索引假阳性；等待用户 push 后 Actions 验证（compileJava + runLogicTests 157+），随后用户游戏内验收（S+D：原版/模组楼梯、上楼角度连续、普通方块不误判、半砖/活板门不当作楼梯；**低空验收用 `/cosmonauticsroll debug on` + `/cosmonauticsroll debug region 0`，验收完 `region default` 恢复**）。
 
 ### 阶段 6：Do a Barrel Roll 兼容
 
@@ -494,6 +495,10 @@ AI 提问清单（用户检查并回答）：
 - 旋转层：SmoothStandingRotation.setStairTarget（楼梯边缘进度防抖
   <0.05 不更新 + reset 清除）；RotationTicker 按 stair 分支喂目标。
 - 逻辑测试 StairLogicTest（11 用例 30+ 断言），LogicTestSuite 总 150+。
+- Debug 低空验收手段：debug.RegionDebugConfig（主世界高度阈值覆盖，纯逻辑）
+  + DebugCommand 新增 debug region <高度>|default（仅 debug 开启时生效）；
+  OverworldAltitudeRule 读取覆盖值（默认仍 8000）。RegionLogicTest 新增
+  覆盖用例（7 断言），LogicTestSuite 总 157+。
 ```
 
 已确认：
