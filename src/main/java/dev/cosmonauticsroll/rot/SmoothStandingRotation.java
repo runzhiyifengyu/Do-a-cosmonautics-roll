@@ -95,6 +95,11 @@ public final class SmoothStandingRotation {
         return smoother.current();
     }
 
+    /** 目标站立方向（身体「上」方向）。 */
+    public Vec3d target() {
+        return smoother.target();
+    }
+
     /** 是否处于恢复竖直模式（离开适用区域后）。 */
     public boolean isLeaving() {
         return leaving;
