@@ -1,16 +1,20 @@
 package dev.cosmonauticsroll.rot;
 
 import dev.cosmonauticsroll.api.detect.FootSurfaceResult;
+import dev.cosmonauticsroll.api.detect.StairProgress;
 import dev.cosmonauticsroll.api.detect.Vec3d;
 import dev.cosmonauticsroll.api.rot.RotationSmoother;
 
 /**
- * 平滑站立方向合成器（阶段 4 核心，PRD 3.3）。
+ * 平滑站立方向合成器（阶段 4 核心，PRD 3.3；阶段 5 扩展楼梯，PRD 3.4）。
  *
  * <p>每 tick 的完整流程：</p>
  * <ol>
  *   <li>{@link #setTarget}：由脚部检测结果决定目标站立方向
  *       （SINGLE → 表面法线；NONE/MULTIPLE → 保持当前，防抖，PRD 3.3-3）；</li>
+ *   <li>{@link #setStairTarget}：楼梯行走进度 → 目标方向（竖直向斜面方向
+ *       倾斜 {@code progress×45°}，PRD 3.4-2/3.4-3），进度变化小于
+ *       防抖阈值时保持（楼梯边缘防抖，PRD 3.4-5）；</li>
  *   <li>{@link #update}：平滑器按每 tick 最大旋转角向目标过渡（PRD 3.3-1/3.3-2），
  *       快速移动/快速离开表面时保持当前方向不瞬间跳变（PRD 3.3-4）；</li>
  *   <li>{@link #leaveRegion}：离开适用区域时平滑恢复竖直方向（PRD 3.3-7）。</li>
@@ -22,9 +26,14 @@ import dev.cosmonauticsroll.api.rot.RotationSmoother;
  */
 public final class SmoothStandingRotation {
 
+    /** 楼梯进度防抖阈值：进度变化小于该值不更新目标（楼梯边缘窄条抖动抑制，PRD 3.4-5）。
+     *  行走速度约 0.2 格/tick，进度变化约 0.1+/tick，取 0.05 只滤除边缘单 tick 噪声。 */
+    public static final double STAIR_PROGRESS_DEAD_ZONE = 0.05;
+
     private final RotationSmoother smoother;
     private final StandingDirectionState state;
     private boolean leaving;
+    private Double lastStairProgress;
 
     public SmoothStandingRotation() {
         this(new RotationSmoother(), new StandingDirectionState());
@@ -55,8 +64,33 @@ public final class SmoothStandingRotation {
         if (leaving) {
             return false; // 离开区域恢复竖直期间不接受新表面目标
         }
+        if (result != null && result.isSingle()) {
+            // 非楼梯普通表面（含 source=stair 已在 resolver 层转为方向）
+            lastStairProgress = null;
+        }
         Vec3d target = state.update(result);
         return smoother.setTarget(target);
+    }
+
+    /**
+     * 输入楼梯行走进度（PRD 3.4-2/3.4-3）：目标方向 = 竖直向斜面方向
+     * 倾斜 {@code progress×45°}；进度相对上次变化小于
+     * {@value #STAIR_PROGRESS_DEAD_ZONE} 时保持当前目标（楼梯边缘防抖，
+     * PRD 3.4-5），不更新。
+     *
+     * @param progress 楼梯行走进度（含目标方向）
+     * @return 是否接受该目标（false = 被防抖规则忽略）
+     */
+    public boolean setStairTarget(StairProgress progress) {
+        if (leaving || progress == null) {
+            return false;
+        }
+        double p = progress.progress();
+        if (lastStairProgress != null && Math.abs(p - lastStairProgress) < STAIR_PROGRESS_DEAD_ZONE) {
+            return false; // 进度变化过小：楼梯边缘防抖
+        }
+        lastStairProgress = p;
+        return smoother.setTarget(progress.standingDirection());
     }
 
     /**
@@ -88,6 +122,7 @@ public final class SmoothStandingRotation {
         smoother.reset();
         state.reset();
         leaving = false;
+        lastStairProgress = null;
     }
 
     /** 当前站立方向（身体「上」方向）。 */

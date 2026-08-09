@@ -15,6 +15,7 @@ public final class LogicTestSuite {
         RegionLogicTest.main(args);
         FootSurfaceLogicTest.main(args);
         RotationLogicTest.main(args);
+        StairLogicTest.main(args);
         System.out.println("=== 全部逻辑测试通过 ===");
     }
 }

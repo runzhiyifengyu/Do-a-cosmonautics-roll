@@ -5,6 +5,35 @@
 
 ---
 
+## 2026-08-11（阶段 5 实现完成，待 Actions 验证与游戏内验收）
+
+### 完成
+- **楼梯旋转核心（纯逻辑，可设备 VM 测试）**：
+  - `api/detect/StairInfo`：楼梯识别信息（朝向 + 半部 + 斜面上升方向）。
+  - `api/detect/StairProgress`：行走进度 0~1 + 站立方向（竖直向斜面方向倾斜 `progress × 45°`，连续非轴向）。
+  - `detect/StairStandingResolver`：进度 = 斜面命中采样数 / 全部采样数（平面→楼梯进度连续 0→1）；多朝向冲突 → null（保持方向防抖）。
+- **游戏内楼梯适配层**：
+  - `detect/StairBlockQuery`：`isStair`（原版 StairBlock instanceof + 注册名含 stair + 三属性）、`info`、`isOnSlope`（45° 斜面碰撞形状判定，容差覆盖采样下沉）、`stepTopY`；半砖/活板门不识别。
+  - `detect/StairSurfaceResolver`：脚底 5 点斜面/台阶判定 + 墙面优先（进入墙面走普通路径，PRD 3.4-4）+ 调试日志 `楼梯：facing=... progress=...`。
+- **检测链接入**：`FootSurfaceResolver` 静态方块兜底先楼梯（source=stair，Resolved 带 StairProgress）再普通表面（普通完整方块仍普通判断）。
+- **旋转层**：`SmoothStandingRotation.setStairTarget`（楼梯边缘进度防抖 <0.05 不更新 + reset 清除）；`RotationTicker` 按 stair 分支喂目标。
+- **逻辑测试 `StairLogicTest`**（11 用例 30+ 断言），LogicTestSuite 总 150+ 断言。
+
+### 状态
+- 阶段 0/1/2/3/4：全部完成（PRD 3.1 / 3.2 / 3.3 验收通过）。
+- **阶段 5：实现完成，待 Actions 验证（编译 + runLogicTests）与用户游戏内验收**。
+
+### 待办（用户操作）
+1. commit/push 本次改动 → Actions（预期编译 OK + runLogicTests 150+ 全部通过）。
+2. 游戏内验收（S+D，`/cosmonauticsroll debug on`）：
+   - 原版/模组楼梯上行：`旋转：... source=stair` + `楼梯：progress=...` 连续变化，角度连续无突然翻转（3.4-2/3.4-3）；
+   - 楼梯边缘：进度微小波动不引起方向抖动（3.4-5）；
+   - 普通完整方块仍普通表面判断；半砖/活板门不当作楼梯（3.4 验收，D 模式日志确认）；
+   - 上下楼/倒退/横向移动（3.4-6）。
+3. 验收通过后更新 CHECKLIST.md 阶段 5 分组（3.4-1~6 + 验收）。
+
+---
+
 ## 2026-08-11（阶段 4 游戏内验收通过）
 
 ### 完成

@@ -7,6 +7,38 @@
 
 ---
 
+## 2026-08-11（阶段 5 实现：楼梯旋转核心 + 检测链接入 + 逻辑测试）
+
+### 本次操作内容
+
+1. **新增纯逻辑楼梯模型**（无 MC 依赖，设备 VM 可测试）：
+   - `api/detect/StairInfo.java`：楼梯识别信息（朝向 Facing 四向 + 半部 Half TOP/BOTTOM），`ascentDirection()` 返回斜面上升方向（水平单位向量）。
+   - `api/detect/StairProgress.java`：行走进度（0~1，clamp）+ `standingDirection()`——身体「上」方向 = 竖直向斜面方向倾斜 `progress × 45°`（PRD 3.4-2/3.4-3 连续调整角度）；progress=0 竖直、0.5 倾斜 22.5°、1 倾斜 45°。
+   - `detect/StairStandingResolver.java`：由「每采样点是否命中斜面/台阶 + 朝向」解析进度——**进度 = 斜面命中数 / 全部采样点数**（从平面走上楼梯时进度从 0 连续升到 1，而非只按楼梯命中点跳变）；多朝向冲突 → 返回 null（保持当前方向，防抖，PRD 3.4-5）。
+
+2. **游戏内楼梯适配层**：
+   - `detect/StairBlockQuery.java`：`isStair`（原版 `StairBlock` instanceof，兼容继承原版楼梯行为的模组方块；或注册名含 `stair` + 标准三属性 shape/facing/half，两端通用字符串判断，PRD 3.4-1）+ `info`（解析朝向/半部）+ `isOnSlope`（按 45° 斜面碰撞形状判定采样点是否在斜面上，容差覆盖 0.05 采样下沉；转角楼梯保守不按斜面处理）+ `stepTopY`。半砖/活板门等非楼梯方块不识别（PRD 3.4 验收）。
+   - `detect/StairSurfaceResolver.java`：脚底矩形 5 点逐个判定斜面/台阶；**墙面优先**——非楼梯采样点命中水平法线（进入墙面）时返回 null 走普通表面路径（PRD 3.4-4 区分上楼与进墙面）；调试日志 `楼梯：facing=... progress=... slopeHits=.../... target=...`。
+
+3. **检测链接入**：`FootSurfaceResolver.resolve` 静态方块兜底路径先做楼梯识别（source=stair，`Resolved` 新增 `stair` 字段携带 `StairProgress`），无楼梯命中再走普通表面合并（普通完整方块仍用普通表面判断，PRD 3.4 验收）。
+
+4. **旋转层楼梯支持**：`SmoothStandingRotation` 新增 `setStairTarget(StairProgress)`——**楼梯边缘进度防抖**（进度变化 < 0.05 不更新目标，PRD 3.4-5；行走速度约 0.2 格/tick、进度变化约 0.1+/tick，0.05 只滤除边缘单 tick 噪声）+ reset 清除防抖状态；`RotationTicker` 按 `resolved.stair != null` 走楼梯目标，否则走普通表面。
+
+5. **逻辑测试 `StairLogicTest`**（11 用例 30+ 断言）：朝向/上升方向、站立方向连续倾斜（0/22.5°/45°/单调）、全台阶 progress=0、部分斜面 progress=0.4、全斜面 progress=1、平面→楼梯进度单调连续、多朝向冲突防抖、无楼梯返回 null、楼梯边缘进度防抖（微小变化忽略/明显变化接受）、平滑过渡不跳变、reset 清除楼梯状态；注册进 `LogicTestSuite`（总 150+ 断言）。
+
+### 验证状态
+
+- 纯逻辑文件（StairInfo/StairProgress/StairStandingResolver/StairLogicTest）get_diagnostics 零错误；MC 适配层（StairBlockQuery/StairSurfaceResolver/FootSurfaceResolver/RotationTicker）仅有已知会话索引假阳性（net.minecraft 无法解析，所有 MC 文件一致），以 GitHub Actions 编译为准。
+- **本设备不编译不运行**（规则）；等待用户 push 后 Actions 验证（compileJava + runLogicTests）。
+
+### 待办
+
+1. 用户 commit/push → Actions（预期编译 OK + runLogicTests 150+ 全部通过）。
+2. 游戏内验收（S+D）：原版/模组楼梯正常行走（source=stair，`楼梯：progress=...` 连续变化）、上楼角度连续无突然翻转、普通完整方块仍普通表面判断、半砖/活板门不当作楼梯（D 模式日志确认）。
+3. 验收通过后更新 CHECKLIST.md 阶段 5 分组（3.4-1~6 + 验收）。
+
+---
+
 ## 2026-08-11（文档整理：PRD/DEVELOPMENT/CHECKLIST 一致性同步）
 
 ### 本次操作内容

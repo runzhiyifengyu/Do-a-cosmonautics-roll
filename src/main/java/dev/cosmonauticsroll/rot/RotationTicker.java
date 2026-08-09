@@ -93,7 +93,13 @@ public final class RotationTicker {
             Vec3d bodyUp = state.rotation.current();
             FootSurfaceResolver.Resolved resolved = new FootSurfaceResolver(player.level())
                     .resolve(player, bodyUp);
-            boolean accepted = state.rotation.setTarget(resolved.result);
+            boolean accepted;
+            if (resolved.stair != null) {
+                // 楼梯（阶段 5，PRD 3.4）：进度防抖由 SmoothStandingRotation 内部处理
+                accepted = state.rotation.setStairTarget(resolved.stair);
+            } else {
+                accepted = state.rotation.setTarget(resolved.result);
+            }
             if (!accepted && resolved.result != null && resolved.result.isSingle()) {
                 // 单一方向表面但被防抖忽略（死区/切换锁）：输出防抖日志（PRD 3.3-3 D 模式验收）
                 Debug.log("防抖：目标被忽略 target={} current={} player={}",

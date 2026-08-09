@@ -4,6 +4,7 @@ import dev.cosmonauticsroll.api.detect.FootSurfaceResult;
 import dev.cosmonauticsroll.api.detect.SurfaceQuery;
 import dev.cosmonauticsroll.api.detect.Vec3d;
 import dev.cosmonauticsroll.debug.Debug;
+import dev.cosmonauticsroll.api.detect.StairProgress;
 
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
@@ -20,11 +21,12 @@ import java.util.List;
  *   <li><b>Sable 子世界（物理化方块）优先</b>：脚底薄片包围盒内所有相交子世界
  *       的方向都收集（阶段 4 增强：不再只取第一个，避免物理化墙角只返回单一方向）；</li>
  *   <li>收集到多个不同方向 → MULTIPLE（不站立）；单一方向 → SINGLE（可站立）；</li>
- *   <li>子世界未命中时，<b>静态方块兜底</b>：脚底矩形 5 点采样 + 法线合并
- *       （多方向 → MULTIPLE，PRD 3.2-5）。</li>
+ *   <li>子世界未命中时，<b>静态方块兜底</b>：先楼梯识别（阶段 5，
+ *       {@link StairSurfaceResolver}，source=stair，带行走进度），
+ *       再脚底矩形 5 点采样 + 法线合并（多方向 → MULTIPLE，PRD 3.2-5）。</li>
  * </ol>
  *
- * <p>返回结果带来源标记（{@code sublevel} / {@code block} / {@code none}），
+ * <p>返回结果带来源标记（{@code sublevel} / {@code stair} / {@code block} / {@code none}），
  * 供调试日志定位（PRD 3.3 验收需观察旋转过程与防抖日志）。</p>
  */
 public final class FootSurfaceResolver {
@@ -41,12 +43,19 @@ public final class FootSurfaceResolver {
     /** 检测结果（结果 + 来源）。 */
     public static final class Resolved {
         public final FootSurfaceResult result;
-        /** 来源：{@code sublevel}（物理化方块）/ {@code block}（静态方块）/ {@code none}。 */
+        /** 来源：{@code sublevel}（物理化方块）/ {@code stair}（楼梯）/ {@code block}（静态方块）/ {@code none}。 */
         public final String source;
+        /** 楼梯行走进度（仅 {@code source=stair} 时非 null，供旋转层进度防抖）。 */
+        public final StairProgress stair;
 
         public Resolved(FootSurfaceResult result, String source) {
+            this(result, source, null);
+        }
+
+        public Resolved(FootSurfaceResult result, String source, StairProgress stair) {
             this.result = result;
             this.source = source;
+            this.stair = stair;
         }
     }
 
@@ -70,7 +79,13 @@ public final class FootSurfaceResolver {
             }
         }
 
-        // 2) 静态方块兜底
+        // 2) 静态方块兜底：先楼梯（阶段 5，PRD 3.4），再普通表面
+        StairProgress stair = new StairSurfaceResolver(level).detect(footCenter, bodyUp, bodyForward);
+        if (stair != null) {
+            // 楼梯站立方向作为 SINGLE 结果交给旋转层（source=stair，带进度供防抖）
+            return new Resolved(FootSurfaceResult.singleDirection(stair.standingDirection()),
+                    "stair", stair);
+        }
         SurfaceQuery query = new LevelSurfaceQuery(level);
         FootSurfaceDetector detector = new FootSurfaceDetector(FootSamplingLayout.rectangle(), query);
         FootSurfaceResult blockResult = detector.detect(footCenter, bodyUp, bodyForward);

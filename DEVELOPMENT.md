@@ -294,13 +294,21 @@ AI 提问清单（用户检查并回答）：
 - [ ] 检查楼梯边缘。
 - [ ] 确认非楼梯方块不会误判。
 
+实现说明（2026-08-11，待 Actions 验证与游戏内验收）：
+
+- 纯逻辑楼梯模型：`api/detect/StairInfo`（朝向 + 半部 + 斜面上升方向）、`api/detect/StairProgress`（行走进度 0~1 + 站立方向 = 竖直向斜面方向倾斜 `progress × 45°`，PRD 3.4-2/3.4-3 连续调整角度）、`detect/StairStandingResolver`（进度 = 斜面命中采样数 / 全部采样数，平面→楼梯进度连续 0→1；多朝向冲突 → null 保持方向防抖）。
+- 游戏内适配层：`detect/StairBlockQuery`（`isStair`：原版 `StairBlock` instanceof + 注册名含 `stair` + 标准三属性 shape/facing/half，PRD 3.4-1 识别原版与模组楼梯；`isOnSlope`：按 45° 斜面碰撞形状判定，容差覆盖 0.05 采样下沉，转角楼梯保守不按斜面处理；半砖/活板门等非楼梯方块不识别）、`detect/StairSurfaceResolver`（脚底 5 点斜面/台阶判定 + 墙面优先——非楼梯采样点命中水平法线时返回 null 走普通表面路径，PRD 3.4-4 区分正常上楼与进入墙面；调试日志 `楼梯：facing=... progress=...`）。
+- 检测链接入：`FootSurfaceResolver` 静态方块兜底先楼梯识别（source=stair，`Resolved` 携带 `StairProgress`），无楼梯命中再走普通表面合并（普通完整方块仍用普通表面判断）。
+- 旋转层：`SmoothStandingRotation.setStairTarget(StairProgress)`（楼梯边缘进度防抖：进度变化 < 0.05 不更新目标，PRD 3.4-5；reset 清除防抖状态）；`RotationTicker` 按 `resolved.stair != null` 走楼梯目标。
+- 逻辑测试 `StairLogicTest`（11 用例 30+ 断言：朝向/上升方向、站立方向连续倾斜、进度计算 0/0.4/1、平面→楼梯单调连续、多朝向冲突、无楼梯 null、进度防抖、平滑过渡、reset），LogicTestSuite 总 150+ 断言。
+
 出口条件：
 
 - 楼梯行走没有明显跳变或卡顿。
 - 用户确认并 commit。
 - 未确认前不得进入阶段 6。
 
-当前状态：未开始
+当前状态：**阶段 5 实现完成（待 Actions 验证 + 游戏内验收）**。实现完成 + 纯逻辑文件 get_diagnostics 零错误；MC 适配层仅已知会话索引假阳性；等待用户 push 后 Actions 验证（compileJava + runLogicTests 150+），随后用户游戏内验收（S+D：原版/模组楼梯、上楼角度连续、普通方块不误判、半砖/活板门不当作楼梯）。
 
 ### 阶段 6：Do a Barrel Roll 兼容
 
@@ -446,7 +454,7 @@ AI 提问清单（用户检查并回答）：
 当前阶段：
 
 ```text
-阶段 4：平滑站立和表面行走（完成，验收通过，待用户 commit）
+阶段 5：楼梯旋转（实现完成，待 Actions 验证与游戏内验收）
 ```
 
 当前状态：
@@ -472,6 +480,20 @@ AI 提问清单（用户检查并回答）：
 - DABR 叠加顺序约定已文档化（阶段 6 接入落地）：
   本模组表面方向为基础姿态旋转，DABR 翻滚在其上叠加，不覆盖。
 - S 模式（玩家身体实际旋转体验）随阶段 6 补验（已记录差异）。
+阶段 5 实现完成（2026-08-11，待 Actions 验证 + 游戏内验收）：
+- 纯逻辑楼梯模型：api.detect.StairInfo（朝向/半部/上升方向）、
+  api.detect.StairProgress（进度 0~1 + 站立方向 = 竖直向斜面倾斜
+  progress×45°，连续非轴向）、detect.StairStandingResolver（进度 =
+  斜面命中数/全部采样数，平面→楼梯连续 0→1；多朝向冲突保持方向）。
+- 游戏内适配层：detect.StairBlockQuery（isStair 原版 instanceof +
+  模组注册名含 stair + 三属性；isOnSlope 45° 斜面碰撞判定；半砖/活板门
+  不识别）、detect.StairSurfaceResolver（5 点斜面/台阶判定 + 墙面优先
+  PRD 3.4-4 + 调试日志）。
+- 检测链接入：FootSurfaceResolver 静态方块兜底先楼梯（source=stair，
+  Resolved 携带 StairProgress）再普通表面。
+- 旋转层：SmoothStandingRotation.setStairTarget（楼梯边缘进度防抖
+  <0.05 不更新 + reset 清除）；RotationTicker 按 stair 分支喂目标。
+- 逻辑测试 StairLogicTest（11 用例 30+ 断言），LogicTestSuite 总 150+。
 ```
 
 已确认：
