@@ -153,20 +153,20 @@ public final class StairLogicTest {
                 new Vec3d(0, 1, 0)) - Math.toRadians(45.0)) < 1e-6);
     }
 
-    /** PRD 3.4-3：从平面走上楼梯——采样点从「全部台阶」逐渐过渡到「部分斜面」，进度连续上升。 */
+    /** PRD 3.4-3：从平面走上楼梯——采样点从「全部命中台阶」逐渐过渡到「部分斜面」，进度连续上升。 */
     private static void testResolverFloorToStairRamp() {
         System.out.println("-- 平面→楼梯进度连续 --");
         StairInfo info = new StairInfo(StairInfo.Facing.SOUTH, StairInfo.Half.BOTTOM);
         double[] progresses = new double[6];
         for (int i = 0; i <= 5; i++) {
-            // i 个点命中斜面，其余命中台阶
+            // i 个点命中斜面，其余 5-i 个点命中水平台阶（站在楼梯最底部台阶 = 全台阶）
             List<StairStandingResolver.StairSample> samples = List.of(
-                    sample(i >= 1, false, info), sample(i >= 2, false, info),
-                    sample(i >= 3, false, info), sample(i >= 4, false, info), sample(i >= 5, false, info));
+                    sample(i >= 1, i < 1, info), sample(i >= 2, i < 2, info),
+                    sample(i >= 3, i < 3, info), sample(i >= 4, i < 4, info), sample(i >= 5, i < 5, info));
             StairProgress p = StairStandingResolver.resolve(samples, new Vec3d(0, 1, 0));
             progresses[i] = p == null ? -1 : p.progress();
         }
-        check("无斜面 → 0", progresses[0] == 0.0);
+        check("无斜面（全台阶）→ 0", progresses[0] == 0.0);
         check("全斜面 → 1", progresses[5] == 1.0);
         boolean increasing = true;
         for (int i = 1; i < 6; i++) {

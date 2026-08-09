@@ -7,6 +7,26 @@
 
 ---
 
+## 2026-08-11（阶段 5 补丁1：Actions 两轮修复——import 缺失 + 测试用例 bug）
+
+### 本次操作内容
+
+1. **补丁1a（compileJava 失败）**：`StairBlockQuery.java:70` `cannot find symbol: Direction`——此前清理 `isOnSlope` 未用变量时误删了 `import net.minecraft.core.Direction;`，但 `info(BlockState)` 仍使用 `Direction`。已恢复 import（第 7 行）。
+2. **补丁1b（runLogicTests 1 失败）**：`StairLogicTest.testResolverFloorToStairRamp` 的 `[FAIL] 无斜面 → 0`——测试自身 bug：i=0 时 5 个采样点都写成 `(onSlope=false, onStep=false)`（完全未命中楼梯），`StairStandingResolver.resolve` 正确返回 null（无楼梯命中 → 保持），而测试期望 progress=0。已修正为「全部命中水平台阶」（`onStep=true`，语义 = 站在楼梯最底部台阶 → progress 0）；其余 i=1..5 保持「i 个斜面 + 5-i 个台阶」递增。
+
+### 验证状态
+
+- 纯逻辑测试文件 get_diagnostics 零错误；生产代码本次仅恢复一行 import。
+- Actions 二跑结果：compileJava 通过（import 修复生效）+ 阶段 2/3/4 测试全过（50/46/35）+ 阶段 5 仅上述 1 处测试用例 bug 失败（生产逻辑未报错，28/29 断言通过，失败项确认为测试数据问题）。
+- 修复后预期：runLogicTests 150+ 全部通过。
+
+### 待办
+
+1. 用户 commit/push → Actions（预期编译 OK + runLogicTests 150+ 全部通过）。
+2. 游戏内验收（S+D）：原版/模组楼梯、上楼角度连续、楼梯边缘不抖、普通方块/半砖/活板门不误判。
+
+---
+
 ## 2026-08-11（阶段 5 实现：楼梯旋转核心 + 检测链接入 + 逻辑测试）
 
 ### 本次操作内容
