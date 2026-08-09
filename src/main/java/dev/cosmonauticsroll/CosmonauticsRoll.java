@@ -4,6 +4,7 @@ import com.mojang.logging.LogUtils;
 
 import dev.cosmonauticsroll.debug.DebugCommand;
 import dev.cosmonauticsroll.region.RegionDebugTicker;
+import dev.cosmonauticsroll.rot.RotationTicker;
 
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.common.Mod;
@@ -41,5 +42,8 @@ public class CosmonauticsRoll {
         // 阶段 2 调试观察挂接：游戏内输出区域状态日志（仅调试开启时），
         // 用于 PRD 3.1 的游戏内验收。
         RegionDebugTicker.register();
+        // 阶段 4 正式旋转逻辑：适用区域内脚部检测 → 平滑站立旋转，
+        // 离开区域平滑恢复竖直（PRD 3.3）。
+        RotationTicker.register();
     }
 }

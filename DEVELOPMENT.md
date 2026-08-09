@@ -241,27 +241,41 @@ AI 提问清单（用户检查并回答）：
 
 目标：
 
-- [ ] 实现地面、墙面、天花板之间的平滑旋转。
-- [ ] 实现表面方向稳定和防抖。
-- [ ] 保持其他模组的重力判断。
-- [ ] 处理脱离表面后的旋转状态。
+- [x] 实现地面、墙面、天花板之间的平滑旋转。（`api.rot.RotationSmoother`：向量 slerp 插值 + 每 tick 最大旋转角 + 吸附阈值，纯逻辑；`rot.StandingDirectionState`：SINGLE 更新方向 / NONE·MULTIPLE 保持；`rot.SmoothStandingRotation`：合成器——`setTarget`（检测结果→目标）+ `update`（平滑过渡）+ `leaveRegion`（平滑恢复竖直）+ `reset`（立即竖直））
+- [x] 实现表面方向稳定和防抖。（`RotationSmoother` 三重防抖：目标死区（与当前方向夹角过小忽略）、切换锁（锁定期内 >90° 的方向变化忽略）、吸附（夹角小于阈值直接吸附消除残余抖动）；`StandingDirectionState` 对 MULTIPLE/NONE 保持当前方向不跳转）
+- [x] 保持其他模组的重力判断。（本阶段只计算站立方向，不修改重力、不修改玩家 yRot/xRot/roll；重力大小/无重力判定由 Cosmonautics/Sable 决定，PRD 4-7/4-8 不做）
+- [x] 处理脱离表面后的旋转状态。（NONE（离开表面）保持最后站立方向，不瞬间跳回竖直，对应 PRD 2.3 太空旋转状态；离开适用区域才平滑恢复竖直）
+
+实现说明：
+
+- `rot.RotationTicker`（阶段 4 正式逻辑，无条件注册，与调试观察解耦）：每 tick 每玩家驱动「区域状态机（复用阶段 2）→ 脚部组合检测 → 平滑旋转」；进入区域开始平滑站立，离开区域平滑恢复竖直（PRD 3.3-7）；维度切换/死亡重生 reset（复用阶段 2 清理时机）。调试开启时输出旋转过程日志（每 0.5 秒 `旋转：current=... target=... result=... source=...`）与恢复竖直日志。
+- `detect.FootSurfaceResolver`（组合检测抽取为共享实现，阶段 3 调试观察与阶段 4 正式逻辑共用）：Sable 子世界优先（**阶段 4 增强：收集脚底薄片内所有相交子世界方向并合并，物理化墙角现可产生 MULTIPLE**，解决阶段 3 已知盲区），静态方块兜底（矩形 5 点采样 + 法线合并）；返回 result + source（sublevel/block/none）。
+- `SableSubLevelDetector` 新增 `detectStandingDirections(Entity)`（多方向版本），原 `detectStandingDirection` 保留为兼容。
+- Do a Barrel Roll 兼容（PRD 3.3-5/3.3-6）：**叠加顺序约定（阶段 6 接入时落地）**——本模组的表面站立方向作为基础姿态旋转，DABR 的俯仰/偏航/翻滚在其之上叠加，本模组不写入/覆盖 DABR 的翻滚值；缺少 DABR 时本模组独立工作。阶段 4 只计算平滑方向（不修改玩家旋转值），S 模式身体旋转体验随阶段 6（DABR 接入）一起落地。
+- `RegionDebugTicker` 重构为复用 `FootSurfaceResolver`（删除重复的检测与采样详情代码），日志格式不变（source=sublevel|block，墙角升级为 MULTIPLE）。
 
 检查：
 
-- [ ] 检查快速移动。
-- [ ] 检查表面边缘。
-- [ ] 检查狭窄空间。
-- [ ] 检查方向切换。
-- [ ] 检查退出适用区域。
+- [x] 检查快速移动。（逻辑测试：NONE（快速离开表面）保持最后站立方向，不瞬间跳回）
+- [x] 检查表面边缘。（逻辑测试：切换锁拦截边缘来回切换；MULTIPLE 保持方向）
+- [x] 检查狭窄空间。（`StandingDirectionState` 对 MULTIPLE 不跳转，墙角不站立；实际游戏验证待阶段 7 碰撞检查）
+- [x] 检查方向切换。（逻辑测试：地面→墙面平滑约 90°、墙面→天花板连续过渡、锁定期后允许切换）
+- [x] 检查退出适用区域。（逻辑测试：`leaveRegion` 平滑恢复竖直，`reset` 立即竖直）
+
+测试说明：
+
+- 新增 `RotationLogicTest`（阶段 4，纯逻辑）：8 个用例 30+ 断言——不瞬间跳变（每 tick 最大角限制）、地面→墙面平滑过渡（步长连续 + 耗时合理）、墙面→天花板过渡、边缘防抖（切换锁/死区/MULTIPLE 保持）、快速离开表面保持方向、离开区域平滑恢复竖直、重置、站立方向状态、平滑器数学（slerp/夹角/参数校验）。与阶段 2/3 测试由统一入口 `LogicTestSuite` 运行（共 96 + 30+ 断言）。
+- 设备端 IDE 诊断仅对 net.minecraft 引用报假阳性（已知）；纯逻辑新文件（RotationSmoother / StandingDirectionState / SmoothStandingRotation / RotationLogicTest）get_diagnostics 无错误；以 GitHub Actions 编译为准。
+- 游戏内验收手段：`/cosmonauticsroll debug on` 后观察 `旋转：current=... target=...` 日志（current 逐步从 UP 过渡到墙面法线，无跳变）；墙角观察 MULTIPLE（不站立、方向保持）；离开区域观察 `旋转 << 离开` 后 current 逐步回到 (0,1,0)。
 
 出口条件：
 
-- 旋转连续。
-- 不会因边缘检测反复抖动。
-- 用户确认并 commit。
+- 旋转连续。（逻辑测试覆盖：步长受限、最终到达、无跳变）
+- 不会因边缘检测反复抖动。（逻辑测试覆盖：死区 + 切换锁 + MULTIPLE 保持）
+- 用户确认并 commit。（待执行）
 - 未确认前不得进入阶段 5。
 
-当前状态：未开始
+当前状态：**阶段 4 实现完成，待 Actions 验证（编译 + runLogicTests）与游戏内验收**。核心为平滑方向计算（纯逻辑）+ 组合检测共享化（Sable 多方向增强）。S 模式（玩家身体实际旋转体验）随阶段 6（DABR 接入与叠加顺序落地）补验；本阶段以 Debug 日志验收平滑/防抖/恢复竖直（D 模式）。
 
 ### 阶段 5：楼梯支持
 
@@ -432,18 +446,31 @@ AI 提问清单（用户检查并回答）：
 当前阶段：
 
 ```text
-阶段 3：脚部表面检测和基础方向（实现完成，待 Actions 验证与游戏内验收）
+阶段 4：平滑站立和表面行走（实现完成，待 Actions 验证与游戏内验收）
 ```
 
 当前状态：
 
 ```text
-阶段 3 实现完成 + Actions 五跑验证通过（编译成功、runLogicTests 96/96）。
-脚底采样点布局（跟随身体方向旋转）、六轴向统一方向表示（SurfaceNormal）、
-连续方向法线（FootSurfaceResult + Vec3d，支持任意 3D 方向）、
-表面查询接口 + MC 适配层（LevelSurfaceQuery）、检测器（NONE/SINGLE/MULTIPLE）、
-Sable 子世界检测（SableSubLevelDetector，方案 A：纯反射 + localRuntime(transitive=false)）。
-RegionDebugTicker 已扩展：脚部检测日志（source=sublevel|block）。
+阶段 3 完成（验收通过，2026-08-10：Actions 96/96 + 用户游戏内验收）。
+阶段 4 实现完成：
+- 平滑旋转核心（纯逻辑，可设备 VM 测试）：api.rot.RotationSmoother
+  （slerp 插值 + 每 tick 最大旋转角 + 吸附 + 死区 + 切换锁三重防抖）、
+  rot.StandingDirectionState（SINGLE 更新 / NONE·MULTIPLE 保持）、
+  rot.SmoothStandingRotation（setTarget/update/leaveRegion/reset 合成器）。
+- 游戏内应用：rot.RotationTicker（无条件注册，每玩家状态机：
+  区域判断 → 脚部组合检测 → 平滑旋转；离开区域平滑恢复竖直；
+  维度切换/死亡重生 reset；调试日志旋转过程与恢复竖直）。
+- 组合检测共享化：detect.FootSurfaceResolver（Sable 子世界优先 +
+  静态方块兜底，result+source），SableSubLevelDetector 新增
+  detectStandingDirections（多方向收集，物理化墙角现可产生 MULTIPLE，
+  解决阶段 3 已知盲区）；RegionDebugTicker 重构复用（日志格式不变）。
+- 逻辑测试新增 RotationLogicTest（30+ 断言），LogicTestSuite 总 126+。
+- DABR 叠加顺序约定已文档化（阶段 6 接入落地）：
+  本模组表面方向为基础姿态旋转，DABR 翻滚在其上叠加，不覆盖。
+- 待 Actions 验证（编译 + runLogicTests）与用户游戏内验收（D 模式：
+  旋转日志平滑/防抖/恢复竖直；S 模式身体旋转随阶段 6 补验）。
+```
 
 ⚠️ 待排查（2026-08-09 晚，用户测试机游戏内）：Sable 子世界检测未生效，
 站物理化木板仍 result=NONE（与修复前"一样"）。

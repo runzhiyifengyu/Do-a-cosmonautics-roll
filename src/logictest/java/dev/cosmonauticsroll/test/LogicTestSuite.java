@@ -14,6 +14,7 @@ public final class LogicTestSuite {
     public static void main(String[] args) {
         RegionLogicTest.main(args);
         FootSurfaceLogicTest.main(args);
+        RotationLogicTest.main(args);
         System.out.println("=== 全部逻辑测试通过 ===");
     }
 }

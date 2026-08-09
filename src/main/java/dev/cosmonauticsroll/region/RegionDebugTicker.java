@@ -1,22 +1,14 @@
 package dev.cosmonauticsroll.region;
 
-import dev.cosmonauticsroll.api.detect.FootSurfaceResult;
-import dev.cosmonauticsroll.api.detect.SurfaceQuery;
 import dev.cosmonauticsroll.api.detect.Vec3d;
 import dev.cosmonauticsroll.debug.Debug;
-import dev.cosmonauticsroll.detect.FootSamplingLayout;
-import dev.cosmonauticsroll.detect.FootSurfaceDetector;
-import dev.cosmonauticsroll.detect.LevelSurfaceQuery;
-import dev.cosmonauticsroll.detect.SableSubLevelDetector;
+import dev.cosmonauticsroll.detect.FootSurfaceResolver;
 import dev.cosmonauticsroll.region.RegionStateMachine.RegionState;
 
-import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
-import net.minecraft.world.phys.shapes.VoxelShape;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
@@ -103,29 +95,17 @@ public final class RegionDebugTicker {
                     box.minY,
                     (box.minZ + box.maxZ) / 2.0);
             // 阶段 3：玩家尚未旋转，身体朝上即世界朝上；
-            // 阶段 4 起改为真实身体方向（旋转后检测跟随）。
+            // 阶段 4 起正式逻辑使用旋转后的真实身体方向（RotationTicker）。
             Vec3d bodyUp = new Vec3d(0, 1, 0);
             // 偏航角（Mojang 映射）：0° = 朝南 +Z，顺时针为正。
             double yawRad = Math.toRadians(player.getYRot());
             Vec3d bodyForward = new Vec3d(-Math.sin(yawRad), 0, Math.cos(yawRad));
 
-            // 组合检测：Sable 子世界（物理化方块）优先，静态方块兜底。
-            Vec3d subLevelDir = SableSubLevelDetector.detectStandingDirection(player);
-            FootSurfaceResult result;
-            String source;
-            if (subLevelDir != null) {
-                result = FootSurfaceResult.singleDirection(subLevelDir);
-                source = "sublevel";
-            } else {
-                SurfaceQuery query = new LevelSurfaceQuery(level);
-                FootSurfaceDetector detector = new FootSurfaceDetector(
-                        FootSamplingLayout.rectangle(), query);
-                result = detector.detect(footCenter, bodyUp, bodyForward);
-                source = "block";
-            }
+            // 组合检测：Sable 子世界（物理化方块）优先，静态方块兜底（与阶段 4 正式逻辑共用）。
+            FootSurfaceResolver.Resolved resolved = new FootSurfaceResolver(level).resolve(player, bodyUp);
 
             Debug.log("脚部检测：result={} source={} footCenter=({},{},{}) bodyUp={} bodyForward={} player={}",
-                    result, source, format(footCenter.x), format(footCenter.y), format(footCenter.z),
+                    resolved.result, resolved.source, format(footCenter.x), format(footCenter.y), format(footCenter.z),
                     bodyUp, bodyForward, player.getGameProfile().getName());
             logFootBlockDetail(level, footCenter, bodyUp, bodyForward);
         } catch (Exception e) {
@@ -136,29 +116,7 @@ public final class RegionDebugTicker {
 
     /** 输出脚底中心下方方块与每个采样点的命中详情（定位 NONE 用）。 */
     private static void logFootBlockDetail(Level level, Vec3d footCenter, Vec3d bodyUp, Vec3d bodyForward) {
-        Vec3d bodyDown = bodyUp.scale(-1.0).normalize();
-        // 脚底中心下沉 0.1 后的方块
-        Vec3d footSample = footCenter.add(bodyDown.scale(FootSurfaceDetector.DEFAULT_QUERY_OFFSET));
-        logBlockAt(level, "脚底中心下方", footSample);
-        // 每个采样点
-        FootSamplingLayout layout = FootSamplingLayout.rectangle();
-        for (int i = 0; i < layout.points().size(); i++) {
-            FootSamplingLayout.SamplePoint p = layout.points().get(i);
-            Vec3d sample = footCenter
-                    .add(p.worldOffset(bodyUp, bodyForward))
-                    .add(bodyDown.scale(FootSurfaceDetector.DEFAULT_QUERY_OFFSET));
-            logBlockAt(level, "采样点" + i, sample);
-        }
-    }
-
-    /** 输出单个点的方块信息：坐标、方块注册名、碰撞形状是否为空。 */
-    private static void logBlockAt(Level level, String label, Vec3d p) {
-        BlockPos pos = BlockPos.containing(p.x, p.y, p.z);
-        BlockState state = level.getBlockState(pos);
-        VoxelShape shape = state.getCollisionShape(level, pos);
-        Debug.log("  脚部采样[{}]：sample=({},{},{}) block={} pos={} collisionEmpty={}",
-                label, format(p.x), format(p.y), format(p.z),
-                state.getBlock().toString(), pos, shape.isEmpty());
+        FootSurfaceResolver.logFootBlockDetail(level, footCenter, bodyUp, bodyForward);
     }
 
     private static String format(double v) {

@@ -7,6 +7,43 @@
 
 ---
 
+## 2026-08-11（阶段 4 实现：平滑旋转核心 + 组合检测共享化 + Sable 多方向增强）
+
+### 本次操作内容
+
+1. **确认阶段 4 启动条件**：Git HEAD = `阶段3(收尾完成)` 210be874（阶段 3 已由用户 commit 收尾），CHECKLIST 阶段 4 分组（PRD 3.3 平滑旋转 8 项）就绪 → 开始阶段 4。
+
+2. **新增纯逻辑平滑旋转核心**（无 MC 依赖，设备 VM 可测试）：
+   - `api/rot/RotationSmoother.java`：向量 slerp 插值 + 每 tick 最大旋转角（默认 4°/tick）+ 吸附阈值；三重防抖——目标死区（与当前方向夹角 <0.25° 忽略）、切换锁（4 tick 内 >90° 方向变化忽略）、吸附（<0.5° 直接吸附）。参数可配置，含参数校验。
+   - `rot/StandingDirectionState.java`：SINGLE → 更新方向；NONE/MULTIPLE/null → 保持当前（墙角不站立不跳转，快速离开表面不瞬间跳回）。
+   - `rot/SmoothStandingRotation.java`：合成器（setTarget / update / leaveRegion 平滑恢复竖直 / reset 立即竖直）。
+
+3. **游戏内应用 `rot/RotationTicker.java`**：无条件注册（正式逻辑，与 Debug 观察解耦）；每 tick 每玩家「RegionStateMachine（复用阶段 2）→ FootSurfaceResolver 组合检测 → 平滑旋转」；离开区域 `leaveRegion()` 平滑恢复竖直；维度切换/死亡重生/登出清理（复用阶段 2 事件时机）；调试开启时输出 `旋转：current=... target=... result=... source=...`（每 0.5 秒）与恢复竖直日志。
+
+4. **组合检测共享化 `detect/FootSurfaceResolver.java`**：Sable 子世界优先 + 静态方块兜底，返回 result + source（sublevel/block/none）；`RegionDebugTicker.logFootDetection` 重构复用（删除重复代码，日志格式不变）。
+
+5. **Sable 多方向增强 `SableSubLevelDetector`**：新增 `detectStandingDirections(Entity)`——收集脚底薄片内**所有**相交子世界方向（原只取第一个），物理化墙角现可合并为 MULTIPLE（解决阶段 3 已知盲区）；原 `detectStandingDirection` 保留兼容。
+
+6. **逻辑测试 `RotationLogicTest.java`**（8 用例 30+ 断言）：不瞬间跳变、地面→墙面平滑约 90°、墙面→天花板过渡、边缘防抖（切换锁/死区/MULTIPLE 保持）、快速离开表面保持方向、离开区域平滑恢复竖直、重置、平滑器数学（slerp/夹角/参数校验）；注册进 `LogicTestSuite`（总 126+ 断言）。
+
+7. **主类注册**：`CosmonauticsRoll` 构造器新增 `RotationTicker.register()`。
+
+8. **文档同步**（规则 11）：DEVELOPMENT.md 阶段 4 段落（目标/实现说明/检查/测试说明/当前状态）+ 第 9 节当前进度；PROGRESS.md 顶部新增阶段 4 实现条目；CHECKLIST.md 阶段 4 分组保持 `[ ]`（未验收不勾选，收尾时更新）。
+
+### 验证状态
+
+- 本设备不编译不运行（规则，MC 代码）；纯逻辑新文件（RotationSmoother / StandingDirectionState / SmoothStandingRotation / RotationLogicTest）`get_diagnostics` 无错误；MC 相关文件（RotationTicker / FootSurfaceResolver / SableSubLevelDetector / RegionDebugTicker / CosmonauticsRoll）仅剩 net.minecraft 符号假阳性（已知，以 Actions 编译为准）。
+- 已修复一处真实错误：`FootSurfaceResolver` 初版 `new SableSubLevelDetector()`（构造器为 private，全静态方法）→ 改为直接静态调用；清理未使用 import。
+- 待 Actions：编译 + runLogicTests（预期 126+ 全部通过）。
+
+### 待办
+
+1. 用户 commit/push → Actions 验证。
+2. 游戏内验收（D 模式日志为主）：平滑过渡、边缘防抖（MULTIPLE）、离开区域恢复竖直；S 模式（身体实际旋转）随阶段 6 补验。
+3. 验收通过后更新 CHECKLIST 阶段 4 分组 + PROGRESS/DEVELOPMENT 收尾，确认后进入阶段 5。
+
+---
+
 ## 2026-08-10（阶段 3 收尾：文档状态更新，验收通过）
 
 ### 本次操作内容

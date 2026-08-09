@@ -12,6 +12,8 @@ import org.joml.Vector3d;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -105,20 +107,40 @@ public final class SableSubLevelDetector {
     }
 
     /**
-     * 检测玩家站立方向的 Sable 子世界方向。
+     * 检测玩家站立方向的 Sable 子世界方向（阶段 3 单方向版本，保留兼容）。
      *
      * @param entity 玩家（或任意实体）
      * @return 子世界「上」方向单位向量（等价于站立表面法线）；无子世界或 Sable 不可用时 {@code null}
      */
     public static Vec3d detectStandingDirection(Entity entity) {
+        List<Vec3d> dirs = detectStandingDirections(entity);
+        return (dirs == null || dirs.isEmpty()) ? null : dirs.get(0);
+    }
+
+    /**
+     * 检测玩家站立方向的所有 Sable 子世界方向（阶段 4 增强）。
+     *
+     * <p>收集脚底薄片包围盒内所有相交子世界的方向（不再只取第一个），
+     * 解决阶段 3 已知盲区：物理化墙角（两个不同朝向的子世界）应返回多个方向，
+     * 由调用方合并为 MULTIPLE（不判定站立）。</p>
+     *
+     * @param entity 玩家（或任意实体）
+     * @return 子世界「上」方向单位向量列表（可能为空）；Sable 不可用时 {@code null}
+     */
+    public static List<Vec3d> detectStandingDirections(Entity entity) {
         if (!AVAILABLE) {
             return null;
         }
-        Vec3d dir = trackingDirection(entity);
-        if (dir != null) {
-            return dir;
+        List<Vec3d> dirs = new ArrayList<>();
+        Vec3d tracking = trackingDirection(entity);
+        if (tracking != null) {
+            dirs.add(tracking);
         }
-        return intersectingDirection(entity);
+        List<Vec3d> intersecting = intersectingDirections(entity);
+        if (intersecting != null) {
+            dirs.addAll(intersecting);
+        }
+        return dirs;
     }
 
     /** 方案 A：Sable 记录的「实体当前所在子世界」方向。 */
@@ -141,6 +163,12 @@ public final class SableSubLevelDetector {
 
     /** 方案 B：脚底薄片包围盒（世界坐标）与子世界全局包围盒求交，取第一个命中子世界的方向。 */
     private static Vec3d intersectingDirection(Entity entity) {
+        List<Vec3d> dirs = intersectingDirections(entity);
+        return (dirs == null || dirs.isEmpty()) ? null : dirs.get(0);
+    }
+
+    /** 方案 B：脚底薄片包围盒（世界坐标）与子世界全局包围盒求交，收集所有命中子世界的方向。 */
+    private static List<Vec3d> intersectingDirections(Entity entity) {
         if (getAllIntersecting == null || boundingBoxCtor == null) {
             return null;
         }
@@ -155,16 +183,19 @@ public final class SableSubLevelDetector {
             double maxZ = box.maxZ + pad;
             Object bounds = boundingBoxCtor.newInstance(minX, minY, minZ, maxX, maxY, maxZ);
             Object result = getAllIntersecting.invoke(helper, entity.level(), bounds);
+            List<Vec3d> dirs = new ArrayList<>();
             if (result instanceof Iterable<?> iterable) {
                 for (Object subLevel : iterable) {
                     Vec3d dir = subLevelUpDirection(subLevel);
                     if (dir != null) {
-                        return dir;
+                        dirs.add(dir);
                     }
                 }
             }
-            logOnce(BOUNDS_MISS_WARNED, "Sable 脚底包围盒查询未命中任何子世界（getAllIntersecting 为空）");
-            return null;
+            if (dirs.isEmpty()) {
+                logOnce(BOUNDS_MISS_WARNED, "Sable 脚底包围盒查询未命中任何子世界（getAllIntersecting 为空）");
+            }
+            return dirs;
         } catch (Throwable t) {
             warnOnce("Sable 物理包围盒查询异常：", t);
             return null;
