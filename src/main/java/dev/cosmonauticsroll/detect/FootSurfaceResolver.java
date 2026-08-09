@@ -153,7 +153,7 @@ public final class FootSurfaceResolver {
         net.minecraft.core.BlockPos pos = net.minecraft.core.BlockPos.containing(p.x, p.y, p.z);
         net.minecraft.world.level.block.state.BlockState state = level.getBlockState(pos);
         net.minecraft.world.phys.shapes.VoxelShape shape = state.getCollisionShape(level, pos);
-        Debug.log("  脚部采样[{}]：sample=({},{},{}) block={} pos={} collisionEmpty={}",
+        Debug.log(Debug.CATEGORY_FOOT, "  脚部采样[{}]：sample=({},{},{}) block={} pos={} collisionEmpty={}",
                 label, String.format("%.2f", p.x), String.format("%.2f", p.y), String.format("%.2f", p.z),
                 state.getBlock().toString(), pos, shape.isEmpty());
     }

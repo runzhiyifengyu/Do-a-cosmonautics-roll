@@ -5,7 +5,6 @@ import dev.cosmonauticsroll.api.detect.StairProgress;
 import dev.cosmonauticsroll.api.detect.SurfaceNormal;
 import dev.cosmonauticsroll.api.detect.SurfaceQuery;
 import dev.cosmonauticsroll.api.detect.Vec3d;
-import dev.cosmonauticsroll.debug.Debug;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.Level;
@@ -65,7 +64,9 @@ public final class StairSurfaceResolver {
      * @return 楼梯站立进度；脚底未命中楼梯（或冲突需保持）时返回 {@code null}
      */
     public StairProgress detect(Vec3d footCenter, Vec3d bodyUp, Vec3d bodyForward) {
-        FootSamplingLayout layout = FootSamplingLayout.rectangle();
+        // 楼梯用密集网格（3×5=15 点）：progress 粒度 1/15 ≈ 0.067，
+        // 上楼时进度连续可见（PRD 3.4-2/3.4-3）。
+        FootSamplingLayout layout = FootSamplingLayout.stairGrid();
         Vec3d bodyDown = bodyUp.scale(-1.0).normalize();
 
         List<StairStandingResolver.StairSample> samples = new ArrayList<>();
@@ -120,21 +121,13 @@ public final class StairSurfaceResolver {
         }
 
         // PRD 3.4-4：区分正常上楼与进入墙面——若脚底同时命中墙面（水平法线），
-        // 墙面优先（返回 null 走普通表面路径，身体转向墙面而非继续爬楼梯）
+        // 墙面优先（返回 null 走普通表面路径，身体转向墙面而非继续爬楼梯）。
+        // （日志由 RotationTicker 统一输出，避免每 tick 刷屏）
         if (wallDetected) {
-            Debug.log("楼梯：脚底同时命中墙面，墙面优先（进入墙面）");
             return null;
         }
 
         StairProgress progress = StairStandingResolver.resolve(samples, bodyUp);
-        if (progress == null) {
-            return null; // 多朝向冲突：保持当前方向（防抖）
-        }
-        if (Debug.isEnabled()) {
-            Debug.log("楼梯：facing={} progress={} slopeHits={}/{} target={}",
-                    progress.facing(), String.format("%.2f", progress.progress()),
-                    slopeHits, samples.size(), progress.standingDirection());
-        }
-        return progress;
+        return progress; // null = 多朝向冲突：保持当前方向（防抖）
     }
 }

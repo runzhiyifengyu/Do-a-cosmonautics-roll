@@ -2,6 +2,7 @@ package dev.cosmonauticsroll.detect;
 
 import dev.cosmonauticsroll.api.detect.Vec3d;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -80,6 +81,26 @@ public final class FootSamplingLayout {
                 new SamplePoint(halfWidth, -halfDepth, 0),
                 new SamplePoint(-halfWidth, halfDepth, 0),
                 new SamplePoint(halfWidth, halfDepth, 0)));
+    }
+
+    /** 楼梯密集网格布局（阶段 5，PRD 3.4-2）：3 列 × 5 行 = 15 点。
+     *  用于楼梯行走进度计算——采样点越多，progress 粒度越细
+     *  （1/15 ≈ 0.067），上楼时角度变化更连续可见。 */
+    public static FootSamplingLayout stairGrid() {
+        return stairGrid(DEFAULT_HALF_WIDTH, DEFAULT_HALF_DEPTH);
+    }
+
+    /** 指定半宽/半深的楼梯密集网格布局：3 列 × 5 行 = 15 点。 */
+    public static FootSamplingLayout stairGrid(double halfWidth, double halfDepth) {
+        List<SamplePoint> points = new ArrayList<>();
+        int rows = 5;
+        for (double right : new double[] {-halfWidth, 0.0, halfWidth}) {
+            for (int i = 0; i < rows; i++) {
+                double forward = -halfDepth + (2.0 * halfDepth * i) / (rows - 1);
+                points.add(new SamplePoint(right, forward, 0));
+            }
+        }
+        return new FootSamplingLayout(points);
     }
 
     /** 采样点列表（只读使用）。 */

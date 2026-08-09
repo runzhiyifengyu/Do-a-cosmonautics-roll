@@ -24,6 +24,7 @@
 
 - 开关：游戏内 `/cosmonauticsroll debug on|off|status`（0 级权限，单人可用）；开发环境 `gradlew runClient/runServer` 默认开启；生产默认关闭，可用 `-Dcosmonauticsroll.debug=true` 开启。
 - 日志：`Debug.log(...)` 仅在开启时输出，统一 `[Debug]` 前缀，写入 `run/logs/latest.log`。
+- 日志类别过滤（阶段 5 新增，用户可自由选择输出哪些日志）：`/cosmonauticsroll debug log <类别> on|off|status` 按类别开关日志——`region`（区域）、`foot`（脚部检测与采样详情）、`rotation`（旋转过程/防抖/进入离开/reset）、`stair`（楼梯 progress 变化事件）；`/cosmonauticsroll debug log status` 查看全部类别状态；类别默认全开，Sable 不可用等一次性诊断警告不受类别控制（始终显示）。
 - 区域高度覆盖（阶段 5 新增，D 模式验收手段）：`/cosmonauticsroll debug region <高度>`（仅 debug 开启时生效）临时把主世界高度阈值覆盖到低空——建筑高度上限 320，Y=8000 高空无法放置普通方块，楼梯/表面逻辑需在低空搭方块验收；`/cosmonauticsroll debug region default` 恢复 8000，`/cosmonauticsroll debug region` 查看当前状态。
 - 后续阶段按需扩展：状态机日志（阶段 2）、脚部检测与法线日志/可视化（阶段 3）、旋转过程与防抖日志（阶段 4）、楼梯识别日志（阶段 5）、DABR 叠加与降级日志（阶段 6）、重力方向与空间检查日志（阶段 7）、铁把手状态日志（阶段 8）。
 

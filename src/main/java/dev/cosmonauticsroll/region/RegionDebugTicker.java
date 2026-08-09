@@ -68,15 +68,15 @@ public final class RegionDebugTicker {
             double centerY = player.getBoundingBox().getCenter().y;
             RegionState state = machine.update(dim, centerY);
             if (machine.entered()) {
-                Debug.log("区域 >> 进入：dim={} y={} player={}（{} -> {}）",
+                Debug.log(Debug.CATEGORY_REGION, "区域 >> 进入：dim={} y={} player={}（{} -> {}）",
                         dim, formatY(centerY), player.getGameProfile().getName(),
                         RegionState.INACTIVE, RegionState.ACTIVE);
             } else if (machine.left()) {
-                Debug.log("区域 << 离开：dim={} y={} player={}（{} -> {}）",
+                Debug.log(Debug.CATEGORY_REGION, "区域 << 离开：dim={} y={} player={}（{} -> {}）",
                         dim, formatY(centerY), player.getGameProfile().getName(),
                         RegionState.ACTIVE, RegionState.INACTIVE);
             } else if (heartbeat) {
-                Debug.log("区域心跳：state={} dim={} y={} player={}",
+                Debug.log(Debug.CATEGORY_REGION, "区域心跳：state={} dim={} y={} player={}",
                         state, dim, formatY(centerY), player.getGameProfile().getName());
             }
             if (machine.isActive() && footCheck) {
@@ -104,13 +104,13 @@ public final class RegionDebugTicker {
             // 组合检测：Sable 子世界（物理化方块）优先，静态方块兜底（与阶段 4 正式逻辑共用）。
             FootSurfaceResolver.Resolved resolved = new FootSurfaceResolver(level).resolve(player, bodyUp);
 
-            Debug.log("脚部检测：result={} source={} footCenter=({},{},{}) bodyUp={} bodyForward={} player={}",
+            Debug.log(Debug.CATEGORY_FOOT, "脚部检测：result={} source={} footCenter=({},{},{}) bodyUp={} bodyForward={} player={}",
                     resolved.result, resolved.source, format(footCenter.x), format(footCenter.y), format(footCenter.z),
                     bodyUp, bodyForward, player.getGameProfile().getName());
             logFootBlockDetail(level, footCenter, bodyUp, bodyForward);
         } catch (Exception e) {
             // 调试观察不应影响正常游戏：任何异常只记日志。
-            Debug.log("脚部检测异常：{}", e.toString());
+            Debug.log(Debug.CATEGORY_FOOT, "脚部检测异常：{}", e.toString());
         }
     }
 
@@ -148,7 +148,7 @@ public final class RegionDebugTicker {
         RegionStateMachine machine = MACHINES.get(player.getUUID());
         if (machine != null) {
             machine.reset();
-            Debug.log("区域 reset：player={} reason={}", player.getGameProfile().getName(), reason);
+            Debug.log(Debug.CATEGORY_REGION, "区域 reset：player={} reason={}", player.getGameProfile().getName(), reason);
         }
     }
 

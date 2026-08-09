@@ -5,6 +5,40 @@
 
 ---
 
+## 2026-08-11（阶段 5 补丁4：日志类别过滤命令）
+
+### 完成
+- **`Debug` 类别系统**：4 类别（region/foot/rotation/stair）默认全开；`log(category, ...)` 受全局+类别双重控制；无类别 `log(...)` 保留（Sable 警告始终显示）。
+- **命令**：`/cosmonauticsroll debug log <类别> on|off|status` + `/cosmonauticsroll debug log status`（未知类别提示可用项）。
+- **调用点归类**：RegionDebugTicker（region/foot）、FootSurfaceResolver（foot）、RotationTicker（rotation/stair）。
+- 验收可自由选择：关 foot/rotation 只看 stair，不再被刷屏。
+
+### 状态
+- **阶段 5：实现 + 低空验收手段 + 日志优化 + 日志类别开关就绪，待 Actions 验证与游戏内验收**。
+
+### 待办（用户操作）
+1. commit/push → Actions（预期编译 OK + runLogicTests 157+）。
+2. 低空验收：`debug on` + `debug region 0`；`debug log foot off`、`debug log rotation off` 可关刷屏日志，只看 `stair`；验收完 `debug log <类别> on` 或 `debug off`。
+
+---
+
+## 2026-08-11（阶段 5 补丁3：楼梯日志刷屏修复 + 进度连续化）
+
+### 完成
+- **密集采样**：`FootSamplingLayout.stairGrid()`（3×5=15 点），progress 粒度 1/15≈0.067；`StairSurfaceResolver` 改用。
+- **日志去刷屏 + 变化事件**：删除每 tick 的 `楼梯：` 日志；`RotationTicker` 输出 progress 变化事件日志（≥0.05 变化才打，稳定零输出，上楼完整 0→1 序列）。
+- **防抖调灵敏**：死区 0.05 → 0.03（约半个粒度），目标跟随灵敏，视觉平滑靠平滑器。
+- **测试**：防抖用例补「单粒度变化被接受」断言。
+
+### 状态
+- **阶段 5：实现 + 低空验收手段 + 日志优化就绪，待 Actions 验证与游戏内验收**。
+
+### 待办（用户操作）
+1. commit/push → Actions（预期编译 OK + runLogicTests 157+）。
+2. 低空验收：`debug on` + `debug region 0` → 上楼梯看 `楼梯：progress=...` 变化序列 + `旋转：current=...` 渐变；稳定时无刷屏。
+
+---
+
 ## 2026-08-11（阶段 5 补丁2：Debug 低空验收手段）
 
 ### 完成

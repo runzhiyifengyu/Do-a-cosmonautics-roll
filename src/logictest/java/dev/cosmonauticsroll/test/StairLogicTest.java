@@ -197,7 +197,9 @@ public final class StairLogicTest {
         check("无楼梯 → null", StairStandingResolver.resolve(samples, new Vec3d(0, 1, 0)) == null);
     }
 
-    /** PRD 3.4-5：楼梯边缘进度防抖——进度变化小于死区时目标不更新。 */
+    /** PRD 3.4-5：楼梯边缘进度防抖——进度变化小于死区时目标不更新；
+     *  密集采样粒度 1/15≈0.067 > 死区 0.03，单粒度变化仍被接受（目标跟随灵敏，
+     *  视觉平滑由平滑器保证）。 */
     private static void testSmoothStairTargetDebounce() {
         System.out.println("-- 楼梯边缘进度防抖 --");
         SmoothStandingRotation rotation = new SmoothStandingRotation();
@@ -210,8 +212,11 @@ public final class StairLogicTest {
         check("微小进度变化被忽略（目标保持）", !rotation.setStairTarget(p2));
         check("目标未改变", rotation.target().equals(t1));
 
-        StairProgress p3 = new StairProgress(east, 0.8, StairInfo.Facing.EAST); // 变化 0.2 > 死区
-        check("明显进度变化被接受", rotation.setStairTarget(p3));
+        StairProgress p3 = new StairProgress(east, 0.67, StairInfo.Facing.EAST); // 变化 0.05 ≥ 0.03（1 个粒度附近）
+        check("单粒度进度变化被接受（目标跟随灵敏）", rotation.setStairTarget(p3));
+
+        StairProgress p4 = new StairProgress(east, 0.9, StairInfo.Facing.EAST); // 变化 0.23 > 死区
+        check("明显进度变化被接受", rotation.setStairTarget(p4));
     }
 
     /** PRD 3.4 验收：楼梯目标方向平滑过渡（不瞬间跳变）。 */

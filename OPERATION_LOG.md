@@ -7,6 +7,52 @@
 
 ---
 
+## 2026-08-11（阶段 5 补丁4：日志类别过滤命令——自由选择输出哪些日志）
+
+### 本次操作内容
+
+1. **背景**：用户验收时被日志刷屏困扰，需要能自由选择输出哪些日志的指令。
+2. **`debug/Debug.java` 扩展**：
+   - 新增 4 个日志类别常量：`CATEGORY_REGION`（区域）/ `CATEGORY_FOOT`（脚部检测）/ `CATEGORY_ROTATION`（旋转）/ `CATEGORY_STAIR`（楼梯）；
+   - 类别开关集合（默认全部开启）+ `isCategoryEnabled` / `setCategoryEnabled`（未知类别返回 false）/ `disabledCategories` / `allCategories`；
+   - 新增 `log(String category, String message, Object...)` 重载——受「全局开关 + 类别开关」双重控制；原 `log(String, Object...)` 保留（不带类别，只受全局开关，用于 Sable 不可用等必须始终可见的一次性诊断）。
+3. **`debug/DebugCommand.java` 新增 `log` 子命令**：`/cosmonauticsroll debug log <类别> on|off|status`（未知类别列出可用项）、`/cosmonauticsroll debug log status`（列出全部类别开关状态）。region 高度覆盖子命令（补丁2）保持兼容。
+4. **调用点归类**：RegionDebugTicker（区域→region、脚部检测→foot）、FootSurfaceResolver 采样详情（→foot）、RotationTicker（进入/离开/防抖/current/恢复竖直/reset→rotation、楼梯 progress 事件→stair）；SableSubLevelDetector 一次性警告保持无类别（始终显示）。
+
+### 验证状态
+
+- 纯逻辑（Debug 类别集合）get_diagnostics 仅 slf4j `info` 假阳性；DebugCommand / 调用点仅已知 MC/Brigadier 假阳性，以 Actions 编译为准。
+- 未 push 验证；预期 compileJava 通过 + runLogicTests 157+ 全部通过（本次无逻辑测试改动）。
+
+### 待办
+
+1. 用户 commit/push → Actions 验证。
+2. 低空验收时可自由选择日志：如 `/cosmonauticsroll debug log foot off` + `/cosmonauticsroll debug log rotation off` 关掉刷屏，只看 `/cosmonauticsroll debug log stair on` 的楼梯进度；验收完 `debug log <类别> on` 恢复或全局 `debug off`。
+
+---
+
+## 2026-08-11（阶段 5 补丁3：楼梯日志刷屏修复 + 进度连续化）
+
+### 本次操作内容
+
+1. **背景**：用户游戏内反馈——日志刷屏难看清；能识别原版楼梯（3.4-1 通过）；progress 无明显连续增大、相关日志过少。根因：① `楼梯：` 日志在 `StairSurfaceResolver` 内部**每 tick 输出**（有楼梯命中就打印，每秒 20 条）；② 楼梯采样沿用普通 5 点矩形布局（progress 粒度 0.2），且玩家走一个台阶仅约 2~3 tick，progress 瞬间 0→1，0.5s 一次的旋转日志采样时已到顶。
+2. **密集采样**：`FootSamplingLayout` 新增 `stairGrid()`（3 列 × 5 行 = 15 点，半宽 0.25 × 半深 0.15），progress 粒度 1/15 ≈ 0.067；`StairSurfaceResolver.detect` 改用该布局。
+3. **日志去刷屏 + 变化事件**：删除 `StairSurfaceResolver` 内部每 tick 的 `楼梯：` 日志与「墙面优先」日志；改由 `RotationTicker` 统一输出——**progress 变化事件日志**（相对上次输出变化 ≥ 0.05 才打印，稳定站立零输出，上楼时完整记录 0→1 序列；离开楼梯重置基线）。
+4. **防抖调灵敏**：`SmoothStandingRotation.STAIR_PROGRESS_DEAD_ZONE` 0.05 → 0.03（约半个采样粒度）——目标跟随灵敏（PRD 3.4-3 连续调整角度），视觉平滑由平滑器（每 tick 最大 4°）保证（PRD 3.4-5）。
+5. **测试**：`StairLogicTest.testSmoothStairTargetDebounce` 增加「单粒度变化（0.05 ≥ 0.03）被接受」断言（原 0.02 忽略 / 0.2 接受保留），断言数不变（仍 4 条），语义对齐新死区。
+
+### 验证状态
+
+- 纯逻辑文件（FootSamplingLayout / SmoothStandingRotation / StairLogicTest）get_diagnostics 零错误；MC 适配层（StairSurfaceResolver / RotationTicker）仅已知会话假阳性。
+- 未 push 验证；预期 compileJava 通过 + runLogicTests 157+ 全部通过。
+
+### 待办
+
+1. 用户 commit/push → Actions 验证。
+2. 低空游戏内验收（`debug on` + `debug region 0`）：上楼梯时看 `楼梯：progress=0.07→0.13→...→1.00` 变化事件序列 + `旋转：current=...` 平滑渐变；稳定站立时无 `楼梯：` 刷屏。
+
+---
+
 ## 2026-08-11（阶段 5 补丁2：Debug 低空验收手段——主世界高度阈值覆盖命令）
 
 ### 本次操作内容

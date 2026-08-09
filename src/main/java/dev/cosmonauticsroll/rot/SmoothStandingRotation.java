@@ -27,8 +27,9 @@ import dev.cosmonauticsroll.api.rot.RotationSmoother;
 public final class SmoothStandingRotation {
 
     /** 楼梯进度防抖阈值：进度变化小于该值不更新目标（楼梯边缘窄条抖动抑制，PRD 3.4-5）。
-     *  行走速度约 0.2 格/tick，进度变化约 0.1+/tick，取 0.05 只滤除边缘单 tick 噪声。 */
-    public static final double STAIR_PROGRESS_DEAD_ZONE = 0.05;
+     *  楼梯密集采样粒度 1/15 ≈ 0.067，取 0.03（约半个粒度）——目标跟随灵敏
+     *  （PRD 3.4-3 连续调整角度），视觉平滑由平滑器（每 tick 最大 4°）保证。 */
+    public static final double STAIR_PROGRESS_DEAD_ZONE = 0.03;
 
     private final RotationSmoother smoother;
     private final StandingDirectionState state;

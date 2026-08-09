@@ -44,6 +44,11 @@ public final class RotationTicker {
     /** 旋转过程日志间隔（tick）：10 tick = 0.5 秒，避免刷屏。 */
     private static final int ROTATION_LOG_INTERVAL = 10;
 
+    /** 楼梯进度变化事件日志阈值：progress 相对上次输出变化 ≥ 该值才输出。
+     *  密集采样粒度 1/15 ≈ 0.067，取 0.05 记录每个粒度变化（上楼过程完整可见），
+     *  稳定站立时零输出（不刷屏）。 */
+    private static final double STAIR_PROGRESS_LOG_THRESHOLD = 0.05;
+
     /** 每玩家旋转状态（多人预留：按玩家 UUID 区分实例）。 */
     private static final Map<UUID, PlayerRotationState> PLAYERS = new HashMap<>();
 
@@ -61,6 +66,8 @@ public final class RotationTicker {
         final RegionStateMachine region = new RegionStateMachine(RegionRules.DEFAULT);
         final SmoothStandingRotation rotation = new SmoothStandingRotation();
         boolean active;
+        /** 上次输出的楼梯 progress（-1 = 尚未记录/离开楼梯），用于变化事件日志。 */
+        double lastLoggedStairProgress = -1.0;
     }
 
     @SubscribeEvent
@@ -81,12 +88,13 @@ public final class RotationTicker {
         if (active && !state.active) {
             // 进入适用区域：开始平滑站立旋转
             state.active = true;
-            Debug.log("旋转 >> 进入：player={}", player.getGameProfile().getName());
+            Debug.log(Debug.CATEGORY_ROTATION, "旋转 >> 进入：player={}", player.getGameProfile().getName());
         } else if (!active && state.active) {
             // 离开适用区域：平滑恢复竖直方向（PRD 3.3-7）
             state.rotation.leaveRegion();
             state.active = false;
-            Debug.log("旋转 << 离开：player={} 开始平滑恢复竖直", player.getGameProfile().getName());
+            Debug.log(Debug.CATEGORY_ROTATION, "旋转 << 离开：player={} 开始平滑恢复竖直",
+                    player.getGameProfile().getName());
         }
 
         if (state.active) {
@@ -97,18 +105,32 @@ public final class RotationTicker {
             if (resolved.stair != null) {
                 // 楼梯（阶段 5，PRD 3.4）：进度防抖由 SmoothStandingRotation 内部处理
                 accepted = state.rotation.setStairTarget(resolved.stair);
+                // 楼梯进度变化事件日志：仅 progress 相对上次变化 ≥ 阈值时输出，
+                // 稳定站立零输出（不刷屏），上楼时完整记录 0→1 序列。
+                double p = resolved.stair.progress();
+                if (Debug.isEnabled()
+                        && (state.lastLoggedStairProgress < 0.0
+                        || Math.abs(p - state.lastLoggedStairProgress) >= STAIR_PROGRESS_LOG_THRESHOLD)) {
+                    state.lastLoggedStairProgress = p;
+                    Debug.log(Debug.CATEGORY_STAIR, "楼梯：facing={} progress={} target={} player={}",
+                            resolved.stair.facing(), String.format("%.2f", p),
+                            resolved.stair.standingDirection(),
+                            player.getGameProfile().getName());
+                }
             } else {
                 accepted = state.rotation.setTarget(resolved.result);
+                // 离开楼梯（回普通表面/悬空）：重置进度日志基线，下次上楼梯重新记录
+                state.lastLoggedStairProgress = -1.0;
             }
             if (!accepted && resolved.result != null && resolved.result.isSingle()) {
                 // 单一方向表面但被防抖忽略（死区/切换锁）：输出防抖日志（PRD 3.3-3 D 模式验收）
-                Debug.log("防抖：目标被忽略 target={} current={} player={}",
+                Debug.log(Debug.CATEGORY_ROTATION, "防抖：目标被忽略 target={} current={} player={}",
                         state.rotation.target(), state.rotation.current(),
                         player.getGameProfile().getName());
             }
             Vec3d current = state.rotation.update(); // 每 tick 推进一次平滑过渡
             if (logRotation) {
-                Debug.log("旋转：current={} target={} result={} source={} player={}",
+                Debug.log(Debug.CATEGORY_ROTATION, "旋转：current={} target={} result={} source={} player={}",
                         current, state.rotation.target(),
                         resolved.result, resolved.source, player.getGameProfile().getName());
             }
@@ -116,7 +138,7 @@ public final class RotationTicker {
             // 离开区域：继续平滑恢复，直到回到竖直（目标已设为 +Y）
             state.rotation.update();
             if (logRotation) {
-                Debug.log("旋转（恢复竖直）：current={} target={} player={}",
+                Debug.log(Debug.CATEGORY_ROTATION, "旋转（恢复竖直）：current={} target={} player={}",
                         state.rotation.current(), state.rotation.target(),
                         player.getGameProfile().getName());
             }
@@ -147,7 +169,7 @@ public final class RotationTicker {
             state.rotation.reset();
             state.active = false;
             state.region.reset();
-            Debug.log("旋转 reset：player={} reason={}", uuid, reason);
+            Debug.log(Debug.CATEGORY_ROTATION, "旋转 reset：player={} reason={}", uuid, reason);
         }
     }
 }
