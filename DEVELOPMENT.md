@@ -197,19 +197,19 @@ AI 提问清单（用户检查并回答）：
 
 目标：
 
-- [ ] 实现跟随身体方向的脚部检测。（`detect.FootSamplingLayout`（局部坐标采样点，随 bodyUp/bodyForward 旋转）+ `detect.FootSurfaceDetector`（核心），纯逻辑）
-- [ ] 获取接触表面法线。（`api.detect.SurfaceQuery` 接口 + `detect.LevelSurfaceQuery` MC 适配层（`BlockState.getCollisionShape` → 最近面法线，轴向近似））
-- [ ] 识别单一表面。（`FootSurfaceResult.SINGLE`，合并同方向）
-- [ ] 拒绝多个不同方向表面。（`FootSurfaceResult.MULTIPLE`）
-- [ ] 建立统一方向表示。（`api.detect.SurfaceNormal` 六轴向枚举 + `FootSurfaceResult` 连续方向 `Vec3d` 法线）
+- [x] 实现跟随身体方向的脚部检测。（`detect.FootSamplingLayout`（局部坐标采样点，随 bodyUp/bodyForward 旋转）+ `detect.FootSurfaceDetector`（核心），纯逻辑）
+- [x] 获取接触表面法线。（`api.detect.SurfaceQuery` 接口 + `detect.LevelSurfaceQuery` MC 适配层（`BlockState.getCollisionShape` → 最近面法线，轴向近似））
+- [x] 识别单一表面。（`FootSurfaceResult.SINGLE`，合并同方向）
+- [x] 拒绝多个不同方向表面。（`FootSurfaceResult.MULTIPLE`）
+- [x] 建立统一方向表示。（`api.detect.SurfaceNormal` 六轴向枚举 + `FootSurfaceResult` 连续方向 `Vec3d` 法线）
 - [x] 支持物理化方块（Sable 子世界）表面方向。（`detect.SableSubLevelDetector`：**双级反射检测**——方案 A `Sable.HELPER.getTrackingSubLevel(entity)` 主查（Sable 碰撞时记录的当前所在子世界），方案 B `Sable.HELPER.getAllIntersecting(level, 脚底薄片包围盒)` 兜底（世界坐标查询相交子世界，取第一个可读方向）；两级均经 `subLevel.logicalPose().orientation()` 旋转 (0,1,0) 得站立方向；Sable 未装/API 变化时反射失败降级为纯方块检测，不崩溃；**依赖策略：SableSubLevelDetector 用反射（Class.forName），编译期不需要 Sable 类在 classpath，故不加 compileOnly；仅 localRuntime（transitive=false，只拿 Sable 本体 jar，避免 veil/create/ponder/flywheel 传递依赖地狱）用于开发环境**；neoforge.mods.toml 声明 sable optional 依赖 `[2.0.3,)`）
 
 检查：
 
-- [ ] 检查地面、墙面、天花板。（逻辑测试覆盖：UP/EAST/DOWN 站立）
-- [ ] 检查墙角和边缘。（逻辑测试覆盖：倾斜姿态横跨地面+墙 → MULTIPLE；边缘部分悬空仍 SINGLE）
-- [ ] 检查身体旋转后的脚部位置。（逻辑测试覆盖：单点布局，身体转向墙 → EAST，身体竖直 → NONE）
-- [ ] 检查只碰到身体其他部位的情况。（逻辑测试覆盖：采样点全部位于脚底矩形内，无头/躯干点）
+- [x] 检查地面、墙面、天花板。（逻辑测试覆盖：UP/EAST/DOWN 站立）
+- [x] 检查墙角和边缘。（逻辑测试覆盖：倾斜姿态横跨地面+墙 → MULTIPLE；边缘部分悬空仍 SINGLE）
+- [x] 检查身体旋转后的脚部位置。（逻辑测试覆盖：单点布局，身体转向墙 → EAST，身体竖直 → NONE）
+- [x] 检查只碰到身体其他部位的情况。（逻辑测试覆盖：采样点全部位于脚底矩形内，无头/躯干点）
 
 测试说明：
 
@@ -220,7 +220,7 @@ AI 提问清单（用户检查并回答）：
 - 2026-08-09 Actions 四跑：编译通过；runLogicTests 1 失败——`[FAIL] 任意方向归一化`：`r.normal().length() == 1.0` 严格比较，浮点精度（0.9999999999999999）。已改为容差比较 `Math.abs(length - 1.0) < 1e-9`。
 - 2026-08-09 Actions 五跑：**编译通过 + runLogicTests 96/96 全部 [PASS]**（BUILD SUCCESSFUL）。
 - 2026-08-09 游戏内验收发现：物理化方块（Sable 子世界）在 y=8000 处是 `void_air`（静态方块世界为空），`LevelSurfaceQuery` 查不到 → NONE。经用户确认方案 A：加 Sable 可选依赖 + `SableSubLevelDetector` 反射检测子世界方向（已实现，见上）。
-- 2026-08-09 游戏内再测（补丁6 jar）：站物理化木板仍 NONE（待用户提供 `脚部检测` 日志行确认 result/source 与有无 `Sable 不可用` 警告；**强烈怀疑测试机装了旧 jar**）。
+- 2026-08-09 游戏内再测（补丁6 jar）：站物理化木板仍 NONE（当时待用户提供 `脚部检测` 日志行确认 result/source 与有无 `Sable 不可用` 警告；**当时强烈怀疑测试机装了旧 jar**）。**已解决**：2026-08-10 升级为双级 Sable 检测 + 用户换最新 Artifact jar 重测通过（见下）。
 - 2026-08-10 排查与加固（未 commit，待 Actions 编译 + 用户重测）：
   - 对照 Sable main 分支源码逐一核实反射签名：`Sable.HELPER`（public static final ActiveSableCompanion）、`ActiveSableCompanion.getTrackingSubLevel(Entity)`、`getAllIntersecting(Level, BoundingBox3dc)`、`SubLevel.logicalPose()`、`BoundingBox3d` 六参数构造器全部存在；Modrinth 确认 NeoForge 1.21.1 最新 Sable 为 2.0.3（2026-06-17 发布）。
   - **排除 `getContaining(entity)` 兜底**：Sable plot 网格原点在世界坐标约 ±2048 万格（DEFAULT_ORIGIN=10000 plot、logPlotSize=7），玩家在世界原点附近的 chunk 坐标换算后落在 plot 网格外恒为 null。
@@ -231,8 +231,8 @@ AI 提问清单（用户检查并回答）：
 
 出口条件：
 
-- 单表面、无表面、多表面三类结果可区分。（逻辑测试 46/46 + Actions 编译通过，待用户游戏内验收确认，含物理化方块）
-- 用户确认并 commit。（待执行）
+- 单表面、无表面、多表面三类结果可区分。（逻辑测试 46/46 + Actions 编译通过 + 用户游戏内验收确认，含物理化方块）
+- 用户确认并 commit。（已完成：2026-08-10 用户游戏内验收通过，阶段 3 收尾 commit）
 - 未确认前不得进入阶段 4。
 
 当前状态：**阶段 3 完成（验收通过）**。实现完成 + Actions 五跑验证通过（编译成功、runLogicTests 96/96）+ 用户游戏内验收通过（2026-08-10，最新 Artifact jar）：水平物理化木板 `SINGLE((-0.001,1.000,-0.000)) source=sublevel`；**侧立木板（侧面朝上）`SINGLE(0.985,0.060,0.158) source=sublevel` → 法线跟随表面方向（近似水平），方向跟随验收通过**；脚部采样 `block=air/void_air`、`collisionEmpty=true` 符合预期；无一次性警告（双级 Sable 路径正常）。CHECKLIST 阶段 3 分组全部 `[x]`。**已知盲区（随阶段 4 增强）**：Sable 路径当前只返回第一个命中的子世界方向（物理化墙角不产生 MULTIPLE），普通方块路径多方向合并已有单元测试覆盖。用户 commit 后进入阶段 4。
@@ -272,10 +272,10 @@ AI 提问清单（用户检查并回答）：
 
 - 旋转连续。（逻辑测试覆盖：步长受限、最终到达、无跳变）
 - 不会因边缘检测反复抖动。（逻辑测试覆盖：死区 + 切换锁 + MULTIPLE 保持）
-- 用户确认并 commit。（待执行）
+- 用户确认并 commit。（已完成：2026-08-11 用户游戏内验收通过 + Actions 编译/逻辑测试通过）
 - 未确认前不得进入阶段 5。
 
-当前状态：**阶段 4 实现完成，待 Actions 验证（编译 + runLogicTests）与游戏内验收**。核心为平滑方向计算（纯逻辑）+ 组合检测共享化（Sable 多方向增强）。S 模式（玩家身体实际旋转体验）随阶段 6（DABR 接入与叠加顺序落地）补验；本阶段以 Debug 日志验收平滑/防抖/恢复竖直（D 模式）。
+当前状态：**阶段 4 完成（验收通过）**。实现完成 + Actions 验证通过（编译 OK + runLogicTests 126+ 全部通过）+ 用户游戏内验收通过（2026-08-11）：侧立物理化木板 target=(0.985,0.060,0.158) 时 current 逐步渐变无跳变（平滑过渡）；跳开悬空 target 保持（快速离开不跳回竖直）；降回 y<8000 后 current 逐步恢复 (0,1,0)（离开区域平滑恢复竖直）；物理化墙角 result=MULTIPLE（Sable 多方向盲区已解决）。S 模式（玩家身体实际旋转体验）随阶段 6（DABR 接入与叠加顺序落地）补验，已记录差异。待用户 commit 后进入阶段 5（PRD 3.4 楼梯旋转）。
 
 ### 阶段 5：楼梯支持
 
@@ -446,42 +446,32 @@ AI 提问清单（用户检查并回答）：
 当前阶段：
 
 ```text
-阶段 4：平滑站立和表面行走（实现完成，待 Actions 验证与游戏内验收）
+阶段 4：平滑站立和表面行走（完成，验收通过，待用户 commit）
 ```
 
 当前状态：
 
 ```text
 阶段 3 完成（验收通过，2026-08-10：Actions 96/96 + 用户游戏内验收）。
-阶段 4 实现完成：
+阶段 4 完成（验收通过，2026-08-11）：
 - 平滑旋转核心（纯逻辑，可设备 VM 测试）：api.rot.RotationSmoother
   （slerp 插值 + 每 tick 最大旋转角 + 吸附 + 死区 + 切换锁三重防抖）、
   rot.StandingDirectionState（SINGLE 更新 / NONE·MULTIPLE 保持）、
   rot.SmoothStandingRotation（setTarget/update/leaveRegion/reset 合成器）。
 - 游戏内应用：rot.RotationTicker（无条件注册，每玩家状态机：
   区域判断 → 脚部组合检测 → 平滑旋转；离开区域平滑恢复竖直；
-  维度切换/死亡重生 reset；调试日志旋转过程与恢复竖直）。
+  维度切换/死亡重生 reset；调试日志旋转过程、防抖与恢复竖直）。
 - 组合检测共享化：detect.FootSurfaceResolver（Sable 子世界优先 +
   静态方块兜底，result+source），SableSubLevelDetector 新增
   detectStandingDirections（多方向收集，物理化墙角现可产生 MULTIPLE，
   解决阶段 3 已知盲区）；RegionDebugTicker 重构复用（日志格式不变）。
-- 逻辑测试新增 RotationLogicTest（30+ 断言），LogicTestSuite 总 126+。
+- 逻辑测试 RotationLogicTest（8 用例 30+ 断言），LogicTestSuite 总 126+，
+  Actions 编译 OK + runLogicTests 全部通过。
+- 用户游戏内验收通过（2026-08-11）：current 渐变无跳变（平滑）、
+  悬空保持方向（快速离开）、降高度逐步恢复竖直、物理化墙角 MULTIPLE。
 - DABR 叠加顺序约定已文档化（阶段 6 接入落地）：
   本模组表面方向为基础姿态旋转，DABR 翻滚在其上叠加，不覆盖。
-- 待 Actions 验证（编译 + runLogicTests）与用户游戏内验收（D 模式：
-  旋转日志平滑/防抖/恢复竖直；S 模式身体旋转随阶段 6 补验）。
-```
-
-⚠️ 待排查（2026-08-09 晚，用户测试机游戏内）：Sable 子世界检测未生效，
-站物理化木板仍 result=NONE（与修复前"一样"）。
-下一步排查（用户睡醒后）：
-1. 用户贴 [Debug] 日志：脚部检测那行的 result= / source=；
-   是否有 "Sable 不可用，降级为纯方块表面检测" 或 "Sable 子世界方向检测异常"；
-   logFootBlockDetail 的 block= 是否 air/void_air。
-2. 确认测试机 jar 是 Actions 五跑（96/96）后的最新 Artifact。
-3. 若反射失败：对照 sable 源码核对 SableSubLevelDetector 的
-   getTrackingSubLevel 参数类型 / logicalPose 归属类 / orientation 接口方法。
-阶段 3 未完成：等待排查 Sable 检测 + 游戏内验收 + commit 后进入阶段 4。
+- S 模式（玩家身体实际旋转体验）随阶段 6 补验（已记录差异）。
 ```
 
 已确认：
@@ -550,7 +540,7 @@ AI 从源码确认的接口（记录，供后续阶段使用）：
 
 ### 10.2-10.6 阶段 3-7 → PRD 3.2-3.6
 
-> 检查项与状态见 [CHECKLIST.md](CHECKLIST.md) 第 2-6 节（阶段 3 逻辑测试 46 断言已通过，游戏内验收进行中；阶段 4-7 未开始）。
+> 检查项与状态见 [CHECKLIST.md](CHECKLIST.md) 第 2-6 节（阶段 3 全部 [x]：Actions 96/96 + 2026-08-10 游戏内验收通过；阶段 4 全部 [x]：Actions 126+ + 2026-08-11 游戏内验收通过，S 模式身体旋转随阶段 6 补验；阶段 5-7 未开始）。
 
 ### 10.7 阶段 8 → PRD 3.7 铁把手方向对齐
 

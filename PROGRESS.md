@@ -5,6 +5,29 @@
 
 ---
 
+## 2026-08-11（阶段 4 游戏内验收通过）
+
+### 完成
+- **阶段 4（平滑旋转，PRD 3.3）游戏内验收通过**：
+  - 用户游戏内观察 `[Debug]` 日志（`/cosmonauticsroll debug on`，物理化木板，玩家身体不转、看 `current` 数值渐变）：
+    - **平滑过渡**：站侧立物理化木板，`target=(0.985,0.060,0.158)` 时 `current` 每 0.5s 逐步渐变至目标，无跳变（3.3-1 验收）；
+    - **快速离开**：跳开悬空 `result=NONE`，target 保持最后方向，不瞬间跳回竖直（3.3-4）；
+    - **恢复竖直**：降回 y<8000，`旋转 << 离开` 后 current 逐步回到 `(0.000,1.000,0.000)`（3.3-7 验收）；
+    - **边缘防抖**：物理化墙角 `result=MULTIPLE source=sublevel`，方向保持（3.3-3，**Sable 多方向盲区已解决**）。
+  - Actions 验证：编译 OK + runLogicTests 126+ 全部通过。
+  - CHECKLIST.md 阶段 4 分组（3.3-1~7 + 验收）全部 `[x]`，验证记录已补（含差异说明：S 模式身体实际旋转随阶段 6 补验；DABR 叠加顺序已文档化，本阶段不修改玩家旋转值故不覆盖 DABR）。
+- **补丁修复记录**：`阶段4(补丁1)`——`SmoothStandingRotation` 补充 `target()` 方法（RotationTicker 日志用，首跑 compileJava 失败 3 处 `cannot find symbol: method target()`），修复后 Actions 通过。
+
+### 状态
+- 阶段 0/1/2/3/4：全部完成（PRD 3.1 / 3.2 / 3.3 验收通过）。
+- **阶段 4 收尾**，等待用户 commit 后进入阶段 5（PRD 3.4 楼梯旋转）。
+
+### 待办（用户操作）
+1. commit 本次文档更新（CHECKLIST / PROGRESS / DEVELOPMENT / OPERATION_LOG，可随阶段 5 一起提交）。
+2. 确认后进入阶段 5：楼梯识别（原版/模组楼梯）、行走进度、连续角度调整、防抖、上下楼/倒退/横向移动。
+
+---
+
 ## 2026-08-11（阶段 4 实现完成，待 Actions 验证与游戏内验收）
 
 ### 完成
