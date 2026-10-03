@@ -7,6 +7,42 @@
 
 ---
 
+## 2026-08-29（阶段 5 补丁7：验收日志分析 + 支撑面法线修复 + 日志降噪）
+
+### 本次操作内容
+
+1. **背景**：用户完成阶段 5 游戏内验收（`/cosmonauticsroll debug on` + `debug region 0`，测试机日志放在 `log/latest_game.log`，561 条 `[Debug]`）。AI 逐条分析日志，判定「楼梯路径基本可用，但发现一个阻塞性 BUG」。
+2. **日志结论（通过项）**：区域高度覆盖命令生效（覆盖 0 → 立即进入 ACTIVE）；原版 `oak_stairs` 识别成功（`source=stair`）；进度连续 `0.00→0.07→0.20→0.27→0.33→0.40→0.47`（密集网格粒度 1/15≈0.067）；`progress=0.47 → target=(0.000,0.934,-0.358)` 与 `progress×45°=21.2°` 完全吻合；无崩溃、无异常堆栈。
+3. **发现的阻塞性 BUG（幻影侧面法线）**：`detect/LevelSurfaceQuery` 按「距离采样点最近的轴向面」判定接触面，而脚部采样点沿身体下方下沉 0.1 格；采样网格半宽 0.3 格、方块边界每 1 格一次，采样点经常落在距竖直侧面 <0.1 格处 → 返回侧面法线。后果：**连续平地（全 oak_planks）被判 MULTIPLE**（34 条脚部检测中 24 条为 `MULTIPLE source=block`，如 L963）；身体竖直时出现 `target=(0,0,1)`/`(-1,0,0)` 的幻影墙面目标；`StairSurfaceResolver` 的「墙面优先」被幻影墙面触发，楼梯与普通表面结果来回跳（`source=stair` ↔ `source=block`）。
+4. **修复 A（支撑面法线）**：
+   - 新增纯逻辑 `api/detect/SupportFaceSelector`：六个轴向面中取 `dot(面外法线, bodyUp)` 最大者（最朝向身体的支撑面），对齐度相同取更近者；`bodyUp` 缺失/零向量时退化为「最近面」（保持旧行为）。
+   - `api/detect/SurfaceQuery` 签名扩展为 `query(Vec3d worldPos, Vec3d bodyUp)`（假实现可忽略该参数）；`detect/LevelSurfaceQuery`、`detect/FootSurfaceDetector`、`detect/StairSurfaceResolver`（墙面判定）同步传入 `bodyUp`。
+5. **修复 C（日志降噪）**：
+   - `rot/RotationTicker`：防抖日志仅在「本 tick 期望方向与当前目标夹角 > 平滑器死区」时输出（稳态不再每 tick 刷屏；日志 124 条 → 预期个位数）；`旋转（恢复竖直）` 仅在 `SmoothStandingRotation.isLeaving()` 期间输出（区域外常态不再刷屏；日志 86 条）。
+   - `rot/SmoothStandingRotation.update()`：恢复竖直完成（与竖直夹角 ≤ `RESTORE_DONE_RADIANS`）后自动退出恢复模式，避免恢复模式长期挂起导致的日志刷屏。
+6. **测试扩展**：
+   - `FootSurfaceLogicTest`：新增 `testSupportFaceSelection`（7 断言：旧最近面规则对照、竖直取上/倒立取下/朝东取东、bodyUp 缺失与零向量退化、对角 bodyUp 平手取更近面）+ `testFlatGroundBoundaryRegression`（2 断言：连续平地贴近方块边界仍 `SINGLE(UP)`）；该文件 46 → 55 断言。
+   - `RotationLogicTest`：新增 `testLeaveRegionCompletes`（3 断言：进入恢复模式、完成后退出、退出时已竖直）；该文件 30+ → 39 断言。
+   - `LogicTestSuite` 总计 181 断言（Region 57 / Foot 55 / Rotation 39 / Stair 30）。
+
+### 验证状态
+
+- 设备内 `javac`（JDK 21）编译纯逻辑 + 逻辑测试源码：**无错误**；`java LogicTestSuite`：**181/181 通过**。
+- MC 适配层（LevelSurfaceQuery / StairSurfaceResolver / RotationTicker / FootSurfaceDetector）仅静态审查（设备无 NeoForge/MC classpath），待 Actions 编译验证。
+- Git：本次 commit/push 由用户明确指示 AI 执行（`.gitignore` 新增 `log/`，本地游戏日志不提交），与开发规则 3「Git 操作由用户执行」的例外已由用户授权。
+
+### 已知差异（按开发规则 10 记录）
+
+- 方块路径的「地面 + 墙面」墙角现在返回单一支撑面（SINGLE），不再产生 MULTIPLE；Sable 物理化方块（子世界）路径不受影响，仍可 MULTIPLE。此为本轮 A 方案（支撑面法线）的取舍；若需在方块路径恢复 PRD 2.4 的墙角 MULTIPLE 语义，需追加「脚底平面水平探测」（只把顶面高于脚底平面的方块算墙）的 B 方案。
+
+### 待办
+
+1. 用户 commit/push → Actions（预期 `compileJava` OK + `runLogicTests` 181 通过）。
+2. 游戏内复验（`debug on` + `debug region 0`）：平地应见 `result=SINGLE((0.000,1.000,0.000)) source=block`（不再 MULTIPLE）；幻影墙面目标消失；楼梯 `progress` 连续、`source` 不再在 stair/block 间跳；日志不再刷屏（防抖/恢复竖直）。
+3. 仍待验收：模组楼梯识别、半砖/活板门不误判、上下楼/倒退/横向（3.4-1 后半、3.4-6、3.4 验收）。
+
+---
+
 ## 2026-08-11（阶段 5 补丁4：日志类别过滤命令——自由选择输出哪些日志）
 
 ### 本次操作内容

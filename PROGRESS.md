@@ -5,6 +5,28 @@
 
 ---
 
+## 2026-08-29（阶段 5 补丁7：验收日志分析 + 支撑面法线修复 + 日志降噪）
+
+### 完成
+- **游戏内验收日志分析（`log/latest_game.log`，561 条 `[Debug]`，`debug on` + `debug region 0`）**：
+  - 通过项：高度覆盖命令生效；原版 `oak_stairs` 识别（`source=stair`）；进度连续 `0.00→0.07→0.20→0.27→0.33→0.40→0.47`；`progress=0.47 → 21.2°` 与 `progress×45°` 公式吻合；无崩溃。
+  - **发现阻塞性 BUG**：`LevelSurfaceQuery` 按「最近轴向面」判定，采样点下沉 0.1 靠近平地竖直边界时返回侧面 → 连续平地误判 `MULTIPLE`（34 条脚部检测中 24 条）、身体竖直时出现幻影墙面目标、楼梯「墙面优先」被幻影墙面触发导致 `source` 在 stair/block 间跳。
+- **修复 A（支撑面法线）**：新增纯逻辑 `api/detect/SupportFaceSelector`（按 `dot(面法线, bodyUp)` 最大取支撑面，bodyUp 缺失退化最近面）；`SurfaceQuery.query(Vec3d, Vec3d bodyUp)` 签名扩展；`LevelSurfaceQuery` / `FootSurfaceDetector` / `StairSurfaceResolver` 同步传入 bodyUp。
+- **修复 C（日志降噪）**：`RotationTicker` 防抖日志仅在「方向确实想改但被拦下」时输出（124 条刷屏消除）；`旋转（恢复竖直）` 仅在恢复过渡期间输出（86 条刷屏消除）；`SmoothStandingRotation.update()` 恢复竖直完成后自动退出恢复模式。
+- **测试**：`FootSurfaceLogicTest` 新增支撑面选择 7 断言 + 平地边界回归 2 断言（46→55）；`RotationLogicTest` 新增恢复模式完成 3 断言（30+→39）；`LogicTestSuite` 总计 **181** 断言。
+- **设备内验证**：JDK 21 `javac` 编译纯逻辑 + 测试源码无错误；`java LogicTestSuite` **181/181 通过**（Region 57 / Foot 55 / Rotation 39 / Stair 30）。
+- **已知差异（已记录）**：方块路径「地面+墙」墙角现在返回 SINGLE（支撑面），不再 MULTIPLE；Sable 子世界路径不受影响（仍可 MULTIPLE）。
+
+### 状态
+- 阶段 3/4 验收通过（不受本次改动影响的路径）；**阶段 5 实现完成 + 本轮验收 BUG 已修复，待 Actions 验证与游戏内复验**。
+
+### 待办（用户操作）
+1. commit/push → Actions（预期编译 OK + runLogicTests 181 通过）。
+2. 游戏内复验（`debug on` + `debug region 0`）：平地 `SINGLE((0,1,0)) source=block`（不再 MULTIPLE）、幻影墙面消失、楼梯 progress 连续且 source 稳定、日志不刷屏。
+3. 仍待验收：模组楼梯、半砖/活板门不误判、上下楼/倒退/横向（本轮用户操作：上楼后又横向/斜向走了几步，3.4-6 部分覆盖）。
+
+---
+
 ## 2026-08-11（阶段 5 补丁4：日志类别过滤命令）
 
 ### 完成

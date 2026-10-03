@@ -30,6 +30,7 @@ public final class RotationLogicTest {
         testAntiShakeMultipleKeepsCurrent();
         testFastLeaveKeepsDirection();
         testLeaveRegionRestoresVertical();
+        testLeaveRegionCompletes();
         testReset();
         testStandingDirectionState();
         testSmootherMath();
@@ -202,6 +203,27 @@ public final class RotationLogicTest {
         }
         check("离开区域最终恢复竖直", angle(current, up) < 1e-6);
         check("恢复过程为平滑过渡（首 tick 未瞬间到竖直）", smooth);
+    }
+
+    /**
+     * 阶段 5 补丁（2026-08-29）：恢复竖直完成后自动退出恢复模式——
+     * 否则区域外会一直每 0.5s 输出「旋转（恢复竖直）」日志（日志 86 条刷屏）。
+     */
+    private static void testLeaveRegionCompletes() {
+        System.out.println("-- 恢复竖直完成后退出恢复模式 --");
+        SmoothStandingRotation rotation = new SmoothStandingRotation();
+        run(rotation, FootSurfaceResult.singleDirection(new Vec3d(1, 0, 0)), 200);
+        rotation.leaveRegion();
+        check("离开区域后进入恢复模式", rotation.isLeaving());
+
+        int ticks = 0;
+        while (rotation.isLeaving() && ticks < 200) {
+            rotation.update();
+            ticks++;
+        }
+        check("恢复竖直后退出恢复模式", !rotation.isLeaving());
+        check("恢复阶段平滑（>1 tick）", ticks > 1);
+        check("退出时已回到竖直", angle(rotation.current(), new Vec3d(0, 1, 0)) < 1e-6);
     }
 
     /** 重置：立即回到竖直（传送/死亡重生，无需平滑）。 */

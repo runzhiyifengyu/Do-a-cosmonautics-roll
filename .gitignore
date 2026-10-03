@@ -39,5 +39,8 @@ run/
 repo/
 !**/src/**/repo/
 
+### 本地游戏日志（仅供验收分析，不提交） ###
+log/
+
 ### CodeAssist (local IDE state) ###
 .platform/

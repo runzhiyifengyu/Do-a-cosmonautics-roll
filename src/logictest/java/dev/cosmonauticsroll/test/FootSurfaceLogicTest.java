@@ -1,6 +1,7 @@
 package dev.cosmonauticsroll.test;
 
 import dev.cosmonauticsroll.api.detect.FootSurfaceResult;
+import dev.cosmonauticsroll.api.detect.SupportFaceSelector;
 import dev.cosmonauticsroll.api.detect.SurfaceNormal;
 import dev.cosmonauticsroll.api.detect.SurfaceQuery;
 import dev.cosmonauticsroll.api.detect.Vec3d;
@@ -38,6 +39,8 @@ public final class FootSurfaceLogicTest {
         testLayout();
         testVec3dMath();
         testContinuousDirection();
+        testSupportFaceSelection();
+        testFlatGroundBoundaryRegression();
 
         System.out.println("----------------------------------------");
         System.out.println("通过: " + passed + "  失败: " + failed);
@@ -55,22 +58,22 @@ public final class FootSurfaceLogicTest {
 
     /** 地面：y <= 0 为方块，法线朝上 UP。 */
     private static SurfaceQuery ground() {
-        return p -> p.y <= 0.0 ? SurfaceNormal.UP : null;
+        return (p, bodyUp) -> p.y <= 0.0 ? SurfaceNormal.UP : null;
     }
 
     /** 天花板：y >= 10 为方块，法线朝下 DOWN。 */
     private static SurfaceQuery ceiling() {
-        return p -> p.y >= 10.0 ? SurfaceNormal.DOWN : null;
+        return (p, bodyUp) -> p.y >= 10.0 ? SurfaceNormal.DOWN : null;
     }
 
     /** 东墙：x < 0 为方块（y 任意），法线朝东 EAST。 */
     private static SurfaceQuery eastWall() {
-        return p -> p.x < -1.0e-6 ? SurfaceNormal.EAST : null;
+        return (p, bodyUp) -> p.x < -1.0e-6 ? SurfaceNormal.EAST : null;
     }
 
     /** 地面 + 东墙：y <= 0 为地面（UP）；x < 0 且 y > 0 为东墙（EAST）。 */
     private static SurfaceQuery groundPlusEastWall() {
-        return p -> {
+        return (p, bodyUp) -> {
             if (p.y <= 0.0) {
                 return SurfaceNormal.UP;
             }
@@ -132,7 +135,7 @@ public final class FootSurfaceLogicTest {
     private static void testEdgePartialContact() {
         System.out.println("-- 边缘部分接触 --");
         // 地面只覆盖 x < 1 区域
-        SurfaceQuery partialGround = p ->
+        SurfaceQuery partialGround = (p, bodyUp) ->
                 (p.y <= 0.0 && p.x < 1.0) ? SurfaceNormal.UP : null;
         FootSurfaceDetector detector = new FootSurfaceDetector(
                 FootSamplingLayout.rectangle(), partialGround);
@@ -179,7 +182,7 @@ public final class FootSurfaceLogicTest {
     private static void testOnlyFeetSampled() {
         System.out.println("-- 只检测脚部 --");
         List<Vec3d> queried = new ArrayList<>();
-        SurfaceQuery recording = p -> {
+        SurfaceQuery recording = (p, bodyUp) -> {
             queried.add(p);
             return p.y <= 0.0 ? SurfaceNormal.UP : null;
         };
@@ -254,6 +257,86 @@ public final class FootSurfaceLogicTest {
             threw = true;
         }
         check("singleDirection(null) 被拒绝", threw);
+    }
+
+    /**
+     * 阶段 5 补丁（2026-08-29）：支撑面选择——消除「几何最近面」在平地边界处
+     * 返回幻影侧面、把连续平地误判成 MULTIPLE 的问题。
+     */
+    private static void testSupportFaceSelection() {
+        System.out.println("-- 支撑面选择（幻影侧面） --");
+        // 采样点在一个全方块 [0,1]^3 内部、靠近东面：距东面 0.05、距上面 0.10
+        double dWest = 0.95;
+        double dEast = 0.05;
+        double dDown = 0.90;
+        double dUp = 0.10;
+        double dNorth = 0.50;
+        double dSouth = 0.50;
+
+        check("旧最近面规则取东面（=幻影侧面，回归对照）",
+                nearestFace(dWest, dEast, dDown, dUp, dNorth, dSouth) == SurfaceNormal.EAST);
+        check("身体竖直时取上面（不取更近的东面）",
+                SupportFaceSelector.select(dWest, dEast, dDown, dUp, dNorth, dSouth, UP) == SurfaceNormal.UP);
+        check("身体倒立时取下面（天花板）",
+                SupportFaceSelector.select(dWest, dEast, dDown, dUp, dNorth, dSouth, new Vec3d(0, -1, 0))
+                        == SurfaceNormal.DOWN);
+        check("身体朝东时取东面（墙面站立）",
+                SupportFaceSelector.select(dWest, dEast, dDown, dUp, dNorth, dSouth, new Vec3d(1, 0, 0))
+                        == SurfaceNormal.EAST);
+        check("bodyUp 缺失时退化为最近面（东面）",
+                SupportFaceSelector.select(dWest, dEast, dDown, dUp, dNorth, dSouth, null) == SurfaceNormal.EAST);
+        check("bodyUp 为零向量时退化为最近面（东面）",
+                SupportFaceSelector.select(dWest, dEast, dDown, dUp, dNorth, dSouth, new Vec3d(0, 0, 0))
+                        == SurfaceNormal.EAST);
+        // 对角 bodyUp（地面→墙面过渡）：上面/东面对齐度相同 → 取距离更近的东面
+        check("对角 bodyUp 平手时取更近面（东面）",
+                SupportFaceSelector.select(dWest, dEast, dDown, dUp, dNorth, dSouth,
+                        new Vec3d(1, 1, 0).normalize()) == SurfaceNormal.EAST);
+    }
+
+    /**
+     * 回归：连续平地 + 脚底贴近方块竖直边界（采样点距边界 < 下沉量 0.1）——
+     * 2026-08-29 日志中该场景被判定 MULTIPLE（24/34 条）。修复后必须 SINGLE(UP)。
+     */
+    private static void testFlatGroundBoundaryRegression() {
+        System.out.println("-- 平地边界回归 --");
+        // 连续平地：方块顶面 y=0、竖直边界 x=1.0；脚底中心 x=0.9（采样点跨越边界）
+        SurfaceQuery fixedFloor = (p, bodyUp) -> {
+            if (p.y > 1.0e-9) {
+                return null;
+            }
+            double dWest = p.x - 0.0;
+            double dEast = Math.max(0.0, 1.0 - p.x);
+            double dUp = 0.0 - p.y;
+            return SupportFaceSelector.select(dWest, dEast, 1.0, dUp, 0.5, 0.5, bodyUp);
+        };
+        FootSurfaceDetector detector = new FootSurfaceDetector(FootSamplingLayout.rectangle(), fixedFloor);
+        FootSurfaceResult r = detector.detect(new Vec3d(0.9, 0.1, 0), UP, FORWARD);
+        check("平地贴近方块边界仍 SINGLE", r.isSingle());
+        check("平地贴近方块边界法线 UP", r.normal().equals(SurfaceNormal.UP.vector()));
+    }
+
+    /** 旧「最近面」规则（修复前 LevelSurfaceQuery 行为），仅用于回归对照。 */
+    private static SurfaceNormal nearestFace(double dWest, double dEast, double dDown, double dUp,
+                                             double dNorth, double dSouth) {
+        double min = Math.min(Math.min(Math.min(dWest, dEast), Math.min(dDown, dUp)),
+                Math.min(dNorth, dSouth));
+        if (min == dUp) {
+            return SurfaceNormal.UP;
+        }
+        if (min == dDown) {
+            return SurfaceNormal.DOWN;
+        }
+        if (min == dEast) {
+            return SurfaceNormal.EAST;
+        }
+        if (min == dWest) {
+            return SurfaceNormal.WEST;
+        }
+        if (min == dSouth) {
+            return SurfaceNormal.SOUTH;
+        }
+        return SurfaceNormal.NORTH;
     }
 
     private static void check(String name, boolean condition) {

@@ -1,6 +1,7 @@
 package dev.cosmonauticsroll.rot;
 
 import dev.cosmonauticsroll.api.detect.Vec3d;
+import dev.cosmonauticsroll.api.rot.RotationSmoother;
 import dev.cosmonauticsroll.debug.Debug;
 import dev.cosmonauticsroll.detect.FootSurfaceResolver;
 import dev.cosmonauticsroll.region.RegionStateMachine;
@@ -35,9 +36,10 @@ import java.util.UUID;
  * 接入时实现（约定：本模组表面方向作为基础旋转，DABR 翻滚在其上叠加，
  * 不覆盖 DABR 的俯仰/偏航/翻滚，见 DEVELOPMENT.md 阶段 6 规划）。</p>
  *
- * <p>调试日志（PRD 3.3 验收，Debug 验收模式）：旋转过程每 tick 输出
- * {@code 旋转：current=... target=...}；防抖事件（目标被忽略）单独输出
- * {@code 防抖：...}；离开区域恢复输出 {@code 恢复竖直：...}。</p>
+ * <p>调试日志（PRD 3.3 验收，Debug 验收模式）：旋转过程每 0.5 秒输出
+ * {@code 旋转：current=... target=...}；防抖事件仅在「方向确实想改但被拦下」
+ * 时输出 {@code 防抖：...}（稳态不刷屏）；离开区域恢复过渡期间输出
+ * {@code 旋转（恢复竖直）：...}（恢复完成即停止）。</p>
  */
 public final class RotationTicker {
 
@@ -102,9 +104,12 @@ public final class RotationTicker {
             FootSurfaceResolver.Resolved resolved = new FootSurfaceResolver(player.level())
                     .resolve(player, bodyUp);
             boolean accepted;
+            // 本 tick 期望的目标方向（用于判断防抖日志是否为「真的被拦下」）
+            Vec3d wanted = null;
             if (resolved.stair != null) {
                 // 楼梯（阶段 5，PRD 3.4）：进度防抖由 SmoothStandingRotation 内部处理
                 accepted = state.rotation.setStairTarget(resolved.stair);
+                wanted = resolved.stair.standingDirection();
                 // 楼梯进度变化事件日志：仅 progress 相对上次变化 ≥ 阈值时输出，
                 // 稳定站立零输出（不刷屏），上楼时完整记录 0→1 序列。
                 double p = resolved.stair.progress();
@@ -119,11 +124,18 @@ public final class RotationTicker {
                 }
             } else {
                 accepted = state.rotation.setTarget(resolved.result);
+                if (resolved.result != null && resolved.result.isSingle()) {
+                    wanted = resolved.result.normal();
+                }
                 // 离开楼梯（回普通表面/悬空）：重置进度日志基线，下次上楼梯重新记录
                 state.lastLoggedStairProgress = -1.0;
             }
-            if (!accepted && resolved.result != null && resolved.result.isSingle()) {
-                // 单一方向表面但被防抖忽略（死区/切换锁）：输出防抖日志（PRD 3.3-3 D 模式验收）
+            // 防抖日志（PRD 3.3-3 D 模式验收）：仅当「确实想换方向但被拦下」时输出。
+            // 稳态（表面法线 == 当前目标、楼梯进度未变）不再每 tick 刷屏
+            // （2026-08-29 日志：124 条刷屏，多为稳态误报）。
+            if (!accepted && wanted != null
+                    && RotationSmoother.angleRadians(wanted, state.rotation.target())
+                    > RotationSmoother.DEFAULT_DEAD_ZONE_RADIANS) {
                 Debug.log(Debug.CATEGORY_ROTATION, "防抖：目标被忽略 target={} current={} player={}",
                         state.rotation.target(), state.rotation.current(),
                         player.getGameProfile().getName());
@@ -137,7 +149,8 @@ public final class RotationTicker {
         } else {
             // 离开区域：继续平滑恢复，直到回到竖直（目标已设为 +Y）
             state.rotation.update();
-            if (logRotation) {
+            // 仅在恢复过渡期间输出（恢复完成/区域外常态不再刷屏，2026-08-29 日志：86 条）
+            if (logRotation && state.rotation.isLeaving()) {
                 Debug.log(Debug.CATEGORY_ROTATION, "旋转（恢复竖直）：current={} target={} player={}",
                         state.rotation.current(), state.rotation.target(),
                         player.getGameProfile().getName());

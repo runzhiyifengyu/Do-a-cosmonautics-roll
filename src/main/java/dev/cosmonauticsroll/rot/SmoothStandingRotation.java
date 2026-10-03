@@ -31,6 +31,12 @@ public final class SmoothStandingRotation {
      *  （PRD 3.4-3 连续调整角度），视觉平滑由平滑器（每 tick 最大 4°）保证。 */
     public static final double STAIR_PROGRESS_DEAD_ZONE = 0.03;
 
+    /** 恢复竖直完成阈值（弧度）：当前方向与竖直夹角小于该值时退出恢复模式。 */
+    public static final double RESTORE_DONE_RADIANS = RotationSmoother.DEFAULT_SNAP_RADIANS;
+
+    /** 原版竖直方向（身体「上」= +Y）。 */
+    private static final Vec3d VERTICAL = new Vec3d(0, 1, 0);
+
     private final RotationSmoother smoother;
     private final StandingDirectionState state;
     private boolean leaving;
@@ -97,10 +103,18 @@ public final class SmoothStandingRotation {
     /**
      * 每 tick 推进一次平滑旋转。
      *
+     * <p>恢复竖直（{@link #leaveRegion()}）完成后自动退出恢复模式：当前方向与
+     * 竖直夹角小于 {@link #RESTORE_DONE_RADIANS} 时 {@link #isLeaving()} 变回
+     * false——避免日志在区域外常态刷屏，也允许重新接受表面目标。</p>
+     *
      * @return 当前站立方向（身体「上」方向，单位向量）
      */
     public Vec3d update() {
-        return smoother.update();
+        Vec3d result = smoother.update();
+        if (leaving && RotationSmoother.angleRadians(result, VERTICAL) <= RESTORE_DONE_RADIANS) {
+            leaving = false; // 已恢复竖直：退出恢复模式
+        }
+        return result;
     }
 
     /**
@@ -111,7 +125,7 @@ public final class SmoothStandingRotation {
      */
     public boolean leaveRegion() {
         leaving = true;
-        smoother.setTarget(new Vec3d(0, 1, 0));
+        smoother.setTarget(VERTICAL);
         return leaving;
     }
 

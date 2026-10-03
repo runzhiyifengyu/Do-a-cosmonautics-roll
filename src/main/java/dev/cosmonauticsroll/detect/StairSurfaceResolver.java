@@ -99,8 +99,10 @@ public final class StairSurfaceResolver {
                     slopeHits++;
                 }
             } else {
-                // 非楼梯方块：检查是否命中墙面（水平法线）——进入墙面时墙面优先
-                SurfaceNormal n = wallQuery.query(sample);
+                // 非楼梯方块：检查是否命中墙面（水平法线）——进入墙面时墙面优先。
+                // 传入 bodyUp 走支撑面判定：避免平地方块边界处的幻影侧面被误判成
+                // 墙面（否则楼梯会被「墙面优先」错误否决，source 在 stair/block 间跳）。
+                SurfaceNormal n = wallQuery.query(sample, bodyUp);
                 if (n != null && n.isHorizontal()) {
                     wallDetected = true;
                 }

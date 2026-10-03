@@ -16,7 +16,7 @@ import java.util.List;
  * </p>
  * <ol>
  * <li>以脚底中心为基准，按 {@link FootSamplingLayout} 生成局部采样点 （采样点随身体方向旋转，PRD 3.2-1/验收「身体旋转后脚部检测也随之旋转」）；</li>
- * <li>每个采样点沿身体下方（{@code -bodyUp}）下沉 {@link #queryOffset()} 后 调用 {@link SurfaceQuery} 获取接触到的表面法线（下沉进入表面内部一点， 便于碰撞形状查询命中）；</li>
+ * <li>每个采样点沿身体下方（{@code -bodyUp}）下沉 {@link #queryOffset()} 后 调用 {@link SurfaceQuery} 获取接触到的表面法线（下沉进入表面内部一点， 便于碰撞形状查询命中）；查询同时传入 {@code bodyUp}，供实现按「支撑面」 而非「几何最近面」判定（避免平地边界处的幻影侧面，PRD 3.2-4）；</li>
  * <li>合并所有采样点的法线（PRD 3.2-4：合并同一方向的多个方块接触）：</li>
  * <li>无接触 → {@link FootSurfaceResult.Type#NONE}；只有单一方向 → {@link FootSurfaceResult.Type#SINGLE}（可站立）；两个及以上不同方向 → {@link FootSurfaceResult.Type#MULTIPLE}（墙角/边缘，不判定站立，PRD 3.2-5）。</li>
  * </ol>
@@ -73,7 +73,7 @@ public final class FootSurfaceDetector {
     for (FootSamplingLayout.SamplePoint point : layout.points()) {
       Vec3d worldOffset = point.worldOffset(bodyUp, bodyForward);
       Vec3d sample = footCenter.add(worldOffset).add(bodyDown.scale(queryOffset));
-      SurfaceNormal normal = query.query(sample);
+      SurfaceNormal normal = query.query(sample, bodyUp);
       if (normal != null && !normals.contains(normal)) {
         normals.add(normal);
       }
