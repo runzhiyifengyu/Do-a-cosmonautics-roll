@@ -13,6 +13,7 @@
 - **走向墙面过渡（PRD 2.4）**：`FootSurfaceDetector` 支持注入 `WallQuery` 与水平移动向量——无支撑面时不探测（PRD 2.3）；「支撑面 + 单一墙面」且正走向墙面（移动 ≥0.02 格/tick、方向对齐 >0.5）→ 返回墙面方向（允许平滑转向并继续行走）；静止/背离/侧向 → MULTIPLE（不判定站立，PRD 3.2-5）。
 - **接线**：`FootSurfaceResolver` 接入 `LevelWallQuery` 与 `entity.xo/zo` 移动向量；调试日志新增「脚踝探测」命中点（只输出命中实心方块的点，平地不刷屏）；`StairSurfaceResolver` 墙面优先改用脚踝探测且**只取前方 ±60° 锥内的墙**（侧墙不算「进入墙面」，否则贴墙上楼会误停楼梯倾斜）。
 - **测试**：`FootSurfaceLogicTest` 55 → **78** 断言（脚踝探测布局 8 + 墙面探测/走向墙面 15）；LogicTestSuite 总 **204**，设备内 `javac` + `java LogicTestSuite` **204/204 通过**。
+- **Actions 验证通过**：commit `0925474` → run 37090382318 `./gradlew build runLogicTests` 成功（编译含 MC 适配层 + 204 断言，mod-jar 已上传）。
 - **差异更新**：补丁7 记录的「方块路径墙角不再 MULTIPLE」已由本补丁补回（真实墙产生 MULTIPLE）；「走向墙面」仅在移动时过渡（静止保持 MULTIPLE，符合 PRD 3.2-5）。
 
 ### 状态

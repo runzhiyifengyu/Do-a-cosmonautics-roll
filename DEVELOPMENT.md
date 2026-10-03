@@ -319,6 +319,7 @@ AI 提问清单（用户检查并回答）：
   - `StairSurfaceResolver`：墙面优先改用脚踝探测，且**只取前方 ±60° 锥内的墙**（侧墙不算「进入墙面」，否则贴着墙壁上楼会误停楼梯倾斜）。
   - 测试：`FootSurfaceLogicTest` 55→78 断言（脚踝探测布局 8 + 墙面探测/走向墙面 15）；LogicTestSuite 总 **204**；设备内 `javac` 编译 + `java LogicTestSuite` 运行 **204/204 通过**。
   - 已知差异更新：方块路径的「地面 + 墙面」墙角现在能产生真实 MULTIPLE（补丁7 的差异已由补丁8 补回）；「走向墙面」在**移动时**允许过渡到墙面（静止时保持 MULTIPLE，符合 PRD 3.2-5）。
+  - Actions 验证通过：commit `0925474` → run 37090382318 `./gradlew build runLogicTests` 成功（编译含 MC 适配层 + 204 断言）。
 
 出口条件：
 

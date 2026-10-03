@@ -24,7 +24,7 @@
 ### 验证状态
 
 - 设备内 JDK 21 `javac` 编译纯逻辑 + 逻辑测试源码：**无错误**；`java LogicTestSuite`：**204/204 通过**（Region 57 / Foot 78 / Rotation 39 / Stair 30）。
-- MC 适配层（`LevelWallQuery` / `FootSurfaceResolver` / `StairSurfaceResolver`）仅静态审查（设备无 NeoForge/MC classpath），待 Actions 编译验证。
+- MC 适配层（`LevelWallQuery` / `FootSurfaceResolver` / `StairSurfaceResolver`）静态审查无语法错误；**GitHub Actions 验证通过**：commit `0925474` → run [37090382318](https://github.com/runzhiyifengyu/Do-a-cosmonautics-roll/actions/runs/37090382318) `./gradlew build runLogicTests` **success**（编译含 MC 适配层 + 204 断言，`mod-jar` 产物已上传）。
 - 已由 AI 提交推送（用户授权 AI 执行 Git；`log/` 不提交）。
 
 ### 待办
