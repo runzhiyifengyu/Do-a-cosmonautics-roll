@@ -3,6 +3,7 @@ package dev.cosmonauticsroll.detect;
 import dev.cosmonauticsroll.api.detect.FootSurfaceResult;
 import dev.cosmonauticsroll.api.detect.SurfaceQuery;
 import dev.cosmonauticsroll.api.detect.Vec3d;
+import dev.cosmonauticsroll.api.detect.WallQuery;
 import dev.cosmonauticsroll.debug.Debug;
 import dev.cosmonauticsroll.api.detect.StairProgress;
 
@@ -87,8 +88,12 @@ public final class FootSurfaceResolver {
                     "stair", stair);
         }
         SurfaceQuery query = new LevelSurfaceQuery(level);
-        FootSurfaceDetector detector = new FootSurfaceDetector(FootSamplingLayout.rectangle(), query);
-        FootSurfaceResult blockResult = detector.detect(footCenter, bodyUp, bodyForward);
+        // 补丁8：脚踝水平墙面探测（PRD 2.4 地面→墙面 / 3.4-4 进入墙面）
+        WallQuery wallQuery = new LevelWallQuery(level);
+        FootSurfaceDetector detector = new FootSurfaceDetector(FootSamplingLayout.rectangle(),
+                query, wallQuery, FootSurfaceDetector.DEFAULT_QUERY_OFFSET);
+        FootSurfaceResult blockResult = detector.detect(footCenter, bodyUp, bodyForward,
+                moveDirection(player));
         if (!blockResult.isNone()) {
             return new Resolved(blockResult, "block");
         }
@@ -128,6 +133,12 @@ public final class FootSurfaceResolver {
         return new Vec3d((box.minX + box.maxX) / 2.0, box.minY, (box.minZ + box.maxZ) / 2.0);
     }
 
+    /** 玩家本 tick 水平移动向量（格/tick）；{@code xo}/{@code zo} 为上一 tick 位置。
+     *  仅用于「支撑面 + 单一墙面」时判断玩家是否正走向墙面（PRD 2.4）。 */
+    private static Vec3d moveDirection(Entity entity) {
+        return new Vec3d(entity.getX() - entity.xo, 0.0, entity.getZ() - entity.zo);
+    }
+
     /** 身体朝前方向（仅用偏航角）：0° = 朝南 +Z，顺时针为正。 */
     private static Vec3d bodyForward(Entity entity) {
         double yawRad = Math.toRadians(entity.getYRot());
@@ -147,6 +158,28 @@ public final class FootSurfaceResolver {
                     .add(bodyDown.scale(FootSurfaceDetector.DEFAULT_QUERY_OFFSET));
             logBlockAt(level, "采样点" + i, sample);
         }
+        // 补丁8：脚踝水平探测点（PRD 2.4 地面→墙面 / 3.4-4 进入墙面）
+        // 只输出命中实心方块的探测点，平地上（探测点悬空）不额外刷屏。
+        for (FootSamplingLayout.WallProbe probe : FootSamplingLayout.ankleProbes()) {
+            Vec3d sample = footCenter.add(probe.worldOffset(bodyUp, bodyForward));
+            if (isSolidAt(level, sample)) {
+                logBlockAt(level, "脚踝探测" + axisLabel(probe.outward(bodyUp, bodyForward)), sample);
+            }
+        }
+    }
+
+    /** 该点是否位于实心碰撞形状内（调试日志用）。 */
+    private static boolean isSolidAt(Level level, Vec3d p) {
+        net.minecraft.core.BlockPos pos = net.minecraft.core.BlockPos.containing(p.x, p.y, p.z);
+        return !level.getBlockState(pos).getCollisionShape(level, pos).isEmpty();
+    }
+
+    /** 外向方向的简短标签（调试日志用）。 */
+    private static String axisLabel(Vec3d outward) {
+        if (Math.abs(outward.x) >= Math.abs(outward.z)) {
+            return outward.x >= 0 ? "[+右]" : "[-右]";
+        }
+        return outward.z >= 0 ? "[+前]" : "[-前]";
     }
 
     private static void logBlockAt(Level level, String label, Vec3d p) {

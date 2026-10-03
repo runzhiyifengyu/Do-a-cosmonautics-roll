@@ -7,6 +7,33 @@
 
 ---
 
+## 2026-10-03（阶段 5 补丁8：脚踝水平墙面探测 + 走向墙面过渡）
+
+### 本次操作内容
+
+1. **背景**：用户确认补丁7 复验结果（阻塞 BUG 已消除）后，AI 指出 A 方案留下的缺口——支撑面采样点沿身体下方下沉，身体竖直时任何方块都返回上面，**普通方块路径永远看不到竖直墙面**，因此「地面→墙面」（PRD 2.4）、站墙面/站天花板、3.4-4「进入墙面」在普通方块上都没有触发条件（阶段 3/4 的墙面验收走的是 Sable 物理化方块路径）。用户选择「现在就做 B」。
+2. **新增纯逻辑 `api/detect/WallQuery`**：脚踝探测接口 `query(Vec3d worldPos, Vec3d outward, Vec3d bodyUp)`。
+3. **新增游戏内实现 `detect/LevelWallQuery`**：读该点方块碰撞形状；排除楼梯方块（`StairBlockQuery.isStair`）；身体接近竖直时要求方块顶面高出探测点 ≥ `MIN_WALL_EXTENT`（0.5 格）——半砖（0.5）/台阶/同层地板都不算墙；用 `SupportFaceSelector` 以「朝向玩家」（`-outward`）为 up 取面向玩家的面，仅返回水平法线。
+4. **`FootSamplingLayout.ankleProbes()`**：脚踝高度 0.25 格、水平外偏 0.31 格（略超碰撞箱半宽 0.3）的右/左/前/后 4 个探测点（`WallProbe`，含外向方向，随身体方向旋转）。
+5. **`FootSurfaceDetector`**：构造函数支持注入 `WallQuery`；新增 `detect(footCenter, bodyUp, bodyForward, moveDirection)`；无支撑面时不探测墙面（PRD 2.3）；「支撑面 + 单一墙面」且玩家正走向墙面（`MIN_MOVE_PER_TICK` 0.02、`MOVE_INTO_WALL_ALIGN` 0.5）→ 返回墙面方向（PRD 2.4 地面→墙面平滑旋转）；静止/背离/侧向 → MULTIPLE（PRD 3.2-5）。
+6. **`FootSurfaceResolver`**：接入 `LevelWallQuery`；用 `entity.getX() - entity.xo` / `getZ() - entity.zo` 计算本 tick 水平移动向量；调试日志新增「脚踝探测[±右/±前]」命中点（`isSolidAt` 过滤，平地不刷屏）。
+7. **`StairSurfaceResolver`**：墙面优先判定改用脚踝探测，且只取前方 ±60° 锥内的墙（`outward.dot(bodyForward) >= 0.5`）——侧墙/背墙不算「进入墙面」，否则贴着墙壁上楼会误停楼梯倾斜。
+8. **测试**：`FootSurfaceLogicTest` 新增 `testAnkleProbeLayout`（8 断言：4 方向、脚踝高度 0.25、外偏 0.31、单位外向量、随身体转向）+ `testWallProbeDetection`（15 断言：墙在探测距离外 SINGLE(UP)、贴墙静止 MULTIPLE、走向墙面 SINGLE(WEST)、背离/侧向 MULTIPLE、悬空不吸附 NONE、探测点 4 个且在脚踝高度）；该文件 55 → **78** 断言，LogicTestSuite 总 **204**。
+9. **文档同步**：`DEVELOPMENT.md`（阶段 5 补丁8 实现说明 + 当前状态 + 第 9 节进度）、`CHECKLIST.md`（补丁7 已知差异标注为已由补丁8 补回）、`PROGRESS.md`（本补丁条目）。
+
+### 验证状态
+
+- 设备内 JDK 21 `javac` 编译纯逻辑 + 逻辑测试源码：**无错误**；`java LogicTestSuite`：**204/204 通过**（Region 57 / Foot 78 / Rotation 39 / Stair 30）。
+- MC 适配层（`LevelWallQuery` / `FootSurfaceResolver` / `StairSurfaceResolver`）仅静态审查（设备无 NeoForge/MC classpath），待 Actions 编译验证。
+- 已由 AI 提交推送（用户授权 AI 执行 Git；`log/` 不提交）。
+
+### 待办
+
+1. 游戏内复验（`debug on` + `debug region 0`）：普通方块走向 1 格以上高的墙 → `脚踝探测` 命中 + `result=SINGLE(水平)`（移动时）/ 停下回 `MULTIPLE`；楼梯尽头有墙 → progress 停止推进；楼梯侧/背有墙 → 上楼倾斜照常；半砖/活板门旁边 → 仍 `SINGLE(UP)`（不算墙也不算楼梯）；模组楼梯、上下楼/倒退/横向（3.4-1 后半、3.4-6）。
+2. 复验通过后收尾阶段 5：勾选 CHECKLIST 3.4-1~6 与验收项。
+
+---
+
 ## 2026-10-03（阶段 5 补丁7 复验：第二份验收日志分析 —— 阻塞 BUG 已消除）
 
 ### 本次操作内容
@@ -62,7 +89,7 @@
 
 ### 已知差异（按开发规则 10 记录）
 
-- 方块路径的「地面 + 墙面」墙角现在返回单一支撑面（SINGLE），不再产生 MULTIPLE；Sable 物理化方块（子世界）路径不受影响，仍可 MULTIPLE。此为本轮 A 方案（支撑面法线）的取舍；若需在方块路径恢复 PRD 2.4 的墙角 MULTIPLE 语义，需追加「脚底平面水平探测」（只把顶面高于脚底平面的方块算墙）的 B 方案。
+- 方块路径的「地面 + 墙面」墙角现在返回单一支撑面（SINGLE），不再产生 MULTIPLE；Sable 物理化方块（子世界）路径不受影响，仍可 MULTIPLE。此为本轮 A 方案（支撑面法线）的取舍；若需在方块路径恢复 PRD 2.4 的墙角 MULTIPLE 语义，需追加「脚底平面水平探测」（只把顶面高于脚底平面的方块算墙）的 B 方案。→ **补丁8 已实现 B 方案**（见上方补丁8 条目）。
 
 ### 待办
 

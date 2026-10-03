@@ -5,6 +5,7 @@ import dev.cosmonauticsroll.api.detect.StairProgress;
 import dev.cosmonauticsroll.api.detect.SurfaceNormal;
 import dev.cosmonauticsroll.api.detect.SurfaceQuery;
 import dev.cosmonauticsroll.api.detect.Vec3d;
+import dev.cosmonauticsroll.api.detect.WallQuery;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.Level;
@@ -108,6 +109,25 @@ public final class StairSurfaceResolver {
                 }
             }
             samples.add(new StairStandingResolver.StairSample(onSlope, onStep, stepTopY, info));
+        }
+
+        // 补丁8：脚踝水平探测——识别真正挡在前方的墙（楼梯尽头进入墙面，
+        // PRD 3.4-4）。下沉采样点落在地板/楼梯方块内，看不到竖直墙面，必须用
+        // 脚踝高度的水平探测。只取「前方」的墙（沿身体朝前 ±60° 锥内）：
+        // 楼梯旁边/背后的墙不算「进入墙面」，否则贴墙上楼会停止楼梯倾斜。
+        WallQuery ankleWallQuery = new LevelWallQuery(level);
+        Vec3d forward = bodyForward.normalize();
+        for (FootSamplingLayout.WallProbe probe : FootSamplingLayout.ankleProbes()) {
+            Vec3d outward = probe.outward(bodyUp, bodyForward);
+            if (outward.dot(forward) < 0.5) {
+                continue; // 侧向/后方：不算进入墙面
+            }
+            Vec3d sample = footCenter.add(probe.worldOffset(bodyUp, bodyForward));
+            SurfaceNormal n = ankleWallQuery.query(sample, outward, bodyUp);
+            if (n != null && n.isHorizontal()) {
+                wallDetected = true;
+                break;
+            }
         }
 
         // 全部未命中楼梯 → 走普通逻辑

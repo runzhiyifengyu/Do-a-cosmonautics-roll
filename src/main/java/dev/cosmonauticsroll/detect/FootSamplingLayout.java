@@ -111,4 +111,65 @@ public final class FootSamplingLayout {
     public int size() {
         return points.size();
     }
+
+    // ---------- 脚踝水平探测（PRD 2.4「地面走向墙面」/ 3.4-4「进入墙面」） ----------
+
+    /** 脚踝探测高度（格）：高于脚底平面，使"顶面在脚底平面或其下"的方块
+     *  （同层地板）探测不到，只有真正高出脚底的方块才算墙。 */
+    public static final double DEFAULT_ANKLE_HEIGHT = 0.25;
+
+    /** 水平探测距离（格）：略大于玩家碰撞箱半宽 0.3，贴着墙时探测点落在墙方块内。 */
+    public static final double DEFAULT_PROBE_DISTANCE = 0.31;
+
+    /**
+     * 脚踝水平探测点：局部坐标（right/forward/down）+ 局部外向方向。
+     *
+     * <p>身体旋转时局部轴随 {@code bodyUp}/{@code bodyForward} 旋转，
+     * 因此探测方向始终跟随玩家当前身体方向（PRD 3.2-1）。</p>
+     */
+    public static final class WallProbe {
+        private final SamplePoint point;
+        /** 外向方向（局部 right 分量）。 */
+        public final double outRight;
+        /** 外向方向（局部 forward 分量）。 */
+        public final double outForward;
+
+        public WallProbe(SamplePoint point, double outRight, double outForward) {
+            this.point = point;
+            this.outRight = outRight;
+            this.outForward = outForward;
+        }
+
+        /** 相对脚底中心的世界偏移。 */
+        public Vec3d worldOffset(Vec3d bodyUp, Vec3d bodyForward) {
+            return point.worldOffset(bodyUp, bodyForward);
+        }
+
+        /** 世界坐标下的外向水平单位向量。 */
+        public Vec3d outward(Vec3d bodyUp, Vec3d bodyForward) {
+            Vec3d rightVec = bodyForward.cross(bodyUp).normalize();
+            Vec3d forwardVec = bodyForward.normalize();
+            return rightVec.scale(outRight).add(forwardVec.scale(outForward)).normalize();
+        }
+    }
+
+    /** 默认脚踝水平探测：右/左/前/后 4 个方向各一点。 */
+    public static List<WallProbe> ankleProbes() {
+        return ankleProbes(DEFAULT_PROBE_DISTANCE, DEFAULT_ANKLE_HEIGHT);
+    }
+
+    /**
+     * 指定参数的脚踝水平探测点：4 个水平方向各一点，位于脚踝高度。
+     *
+     * @param probeDistance 水平探测距离（格）
+     * @param ankleHeight   脚踝高度（格，脚底平面上方）
+     */
+    public static List<WallProbe> ankleProbes(double probeDistance, double ankleHeight) {
+        double down = -ankleHeight; // down 为负 = 高于脚底平面
+        return List.of(
+                new WallProbe(new SamplePoint(probeDistance, 0.0, down), 1.0, 0.0),
+                new WallProbe(new SamplePoint(-probeDistance, 0.0, down), -1.0, 0.0),
+                new WallProbe(new SamplePoint(0.0, probeDistance, down), 0.0, 1.0),
+                new WallProbe(new SamplePoint(0.0, -probeDistance, down), 0.0, -1.0));
+    }
 }

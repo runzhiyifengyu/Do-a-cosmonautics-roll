@@ -5,6 +5,7 @@ import dev.cosmonauticsroll.api.detect.SupportFaceSelector;
 import dev.cosmonauticsroll.api.detect.SurfaceNormal;
 import dev.cosmonauticsroll.api.detect.SurfaceQuery;
 import dev.cosmonauticsroll.api.detect.Vec3d;
+import dev.cosmonauticsroll.api.detect.WallQuery;
 import dev.cosmonauticsroll.detect.FootSamplingLayout;
 import dev.cosmonauticsroll.detect.FootSurfaceDetector;
 
@@ -41,6 +42,8 @@ public final class FootSurfaceLogicTest {
         testContinuousDirection();
         testSupportFaceSelection();
         testFlatGroundBoundaryRegression();
+        testAnkleProbeLayout();
+        testWallProbeDetection();
 
         System.out.println("----------------------------------------");
         System.out.println("通过: " + passed + "  失败: " + failed);
@@ -337,6 +340,90 @@ public final class FootSurfaceLogicTest {
             return SurfaceNormal.SOUTH;
         }
         return SurfaceNormal.NORTH;
+    }
+
+    /**
+     * 阶段 5 补丁8：脚踝水平探测布局——4 个探测点在脚踝高度（脚底平面上方 0.25），
+     * 水平距离 0.31（略超碰撞箱半宽 0.3），外向方向随身体方向旋转。
+     */
+    private static void testAnkleProbeLayout() {
+        System.out.println("-- 脚踝水平探测布局 --");
+        java.util.List<FootSamplingLayout.WallProbe> probes = FootSamplingLayout.ankleProbes();
+        check("脚踝探测 4 个方向", probes.size() == 4);
+
+        double maxHeight = 0;
+        double maxHorizontal = 0;
+        for (FootSamplingLayout.WallProbe probe : probes) {
+            Vec3d offset = probe.worldOffset(UP, FORWARD);
+            maxHeight = Math.max(maxHeight, offset.y);
+            maxHorizontal = Math.max(maxHorizontal,
+                    Math.max(Math.abs(offset.x), Math.abs(offset.z)));
+            Vec3d outward = probe.outward(UP, FORWARD);
+            check("外向量水平（y=0）", Math.abs(outward.y) < 1.0e-9);
+            check("外向量为单位长度", Math.abs(outward.length() - 1.0) < 1.0e-9);
+        }
+        check("探测点高于脚底平面（脚踝高度 0.25）", Math.abs(maxHeight - 0.25) < 1.0e-9);
+        check("探测点水平距离 0.31（超出碰撞箱半宽 0.3）", Math.abs(maxHorizontal - 0.31) < 1.0e-9);
+
+        // 身体转向 +X 后，局部 +右 方向映射到世界 +Z
+        Vec3d rotatedRight = probes.get(0).outward(UP, new Vec3d(1, 0, 0));
+        check("身体转 90° 后探测方向跟随（+Z）", Math.abs(rotatedRight.z - 1.0) < 1.0e-9);
+    }
+
+    /**
+     * 阶段 5 补丁8：真实墙面探测与「走向墙面」过渡（PRD 2.4 / 3.4-4）。
+     * 假世界：地板（y≤0）→ UP；西侧墙（x≥0.5、脚踝高度）→ WEST。
+     */
+    private static void testWallProbeDetection() {
+        System.out.println("-- 脚踝墙面探测与走向墙面 --");
+        SurfaceQuery floor = (p, bodyUp) -> p.y <= 0.0 ? SurfaceNormal.UP : null;
+        WallQuery westWall = (p, outward, bodyUp) ->
+                (p.x >= 0.5 && p.y > 1.0e-9 && p.y <= 2.0) ? SurfaceNormal.WEST : null;
+        FootSurfaceDetector detector = new FootSurfaceDetector(FootSamplingLayout.rectangle(),
+                floor, westWall, FootSurfaceDetector.DEFAULT_QUERY_OFFSET);
+
+        // 墙在探测距离外（脚底中心 x=0.1，+X 探测点 x=0.41 < 0.5）→ 平地 SINGLE(UP)
+        FootSurfaceResult far = detector.detect(new Vec3d(0.1, 0.1, 0), UP, FORWARD);
+        check("墙在探测距离外 → SINGLE(UP)", far.isSingle() && far.normal().equals(SurfaceNormal.UP.vector()));
+
+        // 贴墙静止（+X 探测点 x=0.51 命中墙）→ MULTIPLE（不判定站立，PRD 3.2-5）
+        Vec3d atWall = new Vec3d(0.2, 0.1, 0);
+        FootSurfaceResult still = detector.detect(atWall, UP, FORWARD, null);
+        check("贴墙静止 → MULTIPLE", still.isMultiple());
+
+        // 走向墙面（水平移动 +X，撞向法线 WEST 的墙）→ SINGLE(WEST)，允许转向墙面
+        FootSurfaceResult walkingIn = detector.detect(atWall, UP, FORWARD, new Vec3d(0.1, 0, 0));
+        check("走向墙面 → SINGLE(WEST)", walkingIn.isSingle()
+                && walkingIn.normal().equals(SurfaceNormal.WEST.vector()));
+
+        // 背离墙面走动 → 仍 MULTIPLE
+        FootSurfaceResult walkingAway = detector.detect(atWall, UP, FORWARD, new Vec3d(-0.1, 0, 0));
+        check("背离墙面走动 → MULTIPLE", walkingAway.isMultiple());
+
+        // 移动过快但方向背离（侧向移动）→ MULTIPLE
+        FootSurfaceResult sideways = detector.detect(atWall, UP, FORWARD, new Vec3d(0, 0, 0.1));
+        check("沿墙侧向移动 → MULTIPLE", sideways.isMultiple());
+
+        // 无支撑面（悬空）→ NONE：不做墙面吸附（PRD 2.3）
+        SurfaceQuery air = (p, bodyUp) -> null;
+        FootSurfaceDetector airDetector = new FootSurfaceDetector(FootSamplingLayout.rectangle(),
+                air, westWall, FootSurfaceDetector.DEFAULT_QUERY_OFFSET);
+        check("悬空时不吸附墙面 → NONE",
+                airDetector.detect(new Vec3d(0.2, 0.1, 0), UP, FORWARD, new Vec3d(0.1, 0, 0)).isNone());
+
+        // 墙面探测点确实在脚踝高度（高于脚底平面，仍属脚部范围，PRD 3.2-2）
+        List<Vec3d> probed = new ArrayList<>();
+        WallQuery recording = (p, outward, bodyUp) -> {
+            probed.add(p);
+            return null;
+        };
+        FootSurfaceDetector recordingDetector = new FootSurfaceDetector(FootSamplingLayout.rectangle(),
+                floor, recording, FootSurfaceDetector.DEFAULT_QUERY_OFFSET);
+        recordingDetector.detect(new Vec3d(0, 0.1, 0), UP, FORWARD);
+        check("墙面探测点 4 个", probed.size() == 4);
+        for (Vec3d p : probed) {
+            check("探测点在脚踝高度 y∈[0.2,0.4]", p.y >= 0.2 - 1.0e-6 && p.y <= 0.4 + 1.0e-6);
+        }
     }
 
     private static void check(String name, boolean condition) {
