@@ -304,7 +304,7 @@ AI 提问清单（用户检查并回答）：
 - **日志类别过滤（补丁4，用户可自由选择输出哪些日志）**：`Debug` 新增类别开关——`log(String category, String message, Object...)` 受「全局开关 + 类别开关」控制，类别默认全开；`DebugCommand` 新增 `/cosmonauticsroll debug log <类别> on|off|status` 与 `/cosmonauticsroll debug log status`（region/foot/rotation/stair 四类）；Sable 不可用等一次性诊断警告不带类别始终显示。调用点归类：RegionDebugTicker（region/foot）、FootSurfaceResolver 采样详情（foot）、RotationTicker（rotation/stair）。
 - **Debug 低空验收手段（阶段 5 新增）**：`debug/RegionDebugConfig`（纯逻辑静态配置，主世界高度阈值覆盖）+ `DebugCommand` 新增 `debug region <高度>|default|无参` 子命令（仅 debug 开启时生效）——建筑高度上限 320，Y=8000 高空无法放置普通方块，楼梯验收需把阈值临时降到低空（如 0），验收完 `default` 恢复；`OverworldAltitudeRule` 读取覆盖值（默认仍 8000，不影响正常游戏）。
 - 逻辑测试 `StairLogicTest`（11 用例 30+ 断言：朝向/上升方向、站立方向连续倾斜、进度计算 0/0.4/1、平面→楼梯单调连续、多朝向冲突、无楼梯 null、进度防抖、平滑过渡、reset），`RegionLogicTest` 新增覆盖用例（7 断言：默认低空不启用、覆盖 0 后低空启用/边界 0 启用/负值不启用、下界约束不变、恢复默认生效），LogicTestSuite 总 157+ 断言。
-- **支撑面法线修复 + 日志降噪（补丁7，2026-08-29 游戏内验收日志分析后）**：
+- **支撑面法线修复 + 日志降噪（补丁7，2026-10-03 游戏内验收日志分析后）**：
   - BUG：`LevelSurfaceQuery` 原按「距离采样点最近的轴向面」判定接触面；脚部采样点下沉 0.1 格、采样网格半宽 0.3 格、方块边界每 1 格一次 → 采样点常落在距竖直侧面 <0.1 格处，把连续平地判成 `MULTIPLE`（日志 22/34 条），身体竖直时产生幻影墙面目标，并让楼梯「墙面优先」误触发（`source` 在 stair/block 间跳）。
   - 修复：新增纯逻辑 `api/detect/SupportFaceSelector`——按 `dot(面外法线, bodyUp)` 最大取「支撑面」（平手取更近面；bodyUp 缺失/零向量退化为最近面）；`SurfaceQuery.query(Vec3d worldPos, Vec3d bodyUp)` 签名扩展；`LevelSurfaceQuery` / `FootSurfaceDetector` / `StairSurfaceResolver`（墙面判定）同步传入 bodyUp。
   - 已知差异：方块路径「地面 + 墙面」墙角现在返回 SINGLE（支撑面），不再 MULTIPLE；Sable 子世界路径不受影响（仍可 MULTIPLE）。若需恢复方块路径墙角 MULTIPLE，需追加「脚底平面水平探测」（只把顶面高于脚底平面的方块算墙）——B 方案，待用户决定。
@@ -317,7 +317,7 @@ AI 提问清单（用户检查并回答）：
 - 用户确认并 commit。
 - 未确认前不得进入阶段 6。
 
-当前状态：**阶段 5 实现完成（Actions 已验证，待游戏内复验）**。2026-08-29 完成一轮游戏内验收（日志 `log/latest_game.log`）：原版楼梯识别、progress 连续、角度公式均通过，但发现「平地误判 MULTIPLE」的阻塞性 BUG（幻影侧面法线）并已修复（补丁7：支撑面法线 + 日志降噪）。验证：设备内 181/181 逻辑测试通过；GitHub Actions（commit `65b2b68`，run 37087294992）`./gradlew build runLogicTests` 成功（编译含 MC 适配层 + 181 断言，mod-jar 产物已上传）。随后用户游戏内复验（平地应 SINGLE(UP)、幻影墙面消失、楼梯 source 稳定、日志不刷屏；**低空验收用 `/cosmonauticsroll debug on` + `/cosmonauticsroll debug region 0`，验收完 `region default` 恢复**）。
+当前状态：**阶段 5 实现完成 + 补丁7 复验通过（阻塞 BUG 已消除），待补测 4 项后收尾**。2026-10-03 两轮游戏内验收（日志 `log/latest_game.log`）：第一轮发现「平地误判 MULTIPLE / 幻影墙面 / 日志刷屏」的阻塞性 BUG，已修复（补丁7：支撑面法线 + 日志降噪）；第二轮复验确认消除——18 条脚部检测中 `MULTIPLE` 由 24 条降至 **0 条**、13 条 `SINGLE((0,1,0)) source=block`、楼梯进度 `0.00→…→0.40` 且角度 = `progress×45°`、`防抖` 日志 124→0、`恢复竖直` 86→0。验证：设备内 181/181 逻辑测试通过；GitHub Actions（commit `65b2b68`，run 37087294992）`./gradlew build runLogicTests` 成功（编译含 MC 适配层 + 181 断言，mod-jar 产物已上传）。仍待补测：模组楼梯、半砖/活板门不误判、楼梯尽头进墙面（3.4-4）、上下楼/倒退/横向（3.4-6）；另有 2 项观察待决定（进度上限约 0.40 ≈ 18–21°、台阶顶面/斜面目标随台阶切换）。**低空验收用 `/cosmonauticsroll debug on` + `/cosmonauticsroll debug region 0`，验收完 `region default` 恢复**。
 
 ### 阶段 6：Do a Barrel Roll 兼容
 
@@ -489,7 +489,7 @@ AI 提问清单（用户检查并回答）：
 - DABR 叠加顺序约定已文档化（阶段 6 接入落地）：
   本模组表面方向为基础姿态旋转，DABR 翻滚在其上叠加，不覆盖。
 - S 模式（玩家身体实际旋转体验）随阶段 6 补验（已记录差异）。
-阶段 5 实现完成（2026-08-11，补丁1~4 已修；2026-08-29 补丁7 修复验收发现的
+阶段 5 实现完成（2026-08-11，补丁1~4 已修；2026-10-03 补丁7 修复验收发现的
 平地 MULTIPLE BUG + 日志降噪，待 Actions 验证 + 游戏内复验）：
 - 纯逻辑楼梯模型：api.detect.StairInfo（朝向/半部/上升方向）、
   api.detect.StairProgress（进度 0~1 + 站立方向 = 竖直向斜面倾斜
@@ -511,7 +511,7 @@ AI 提问清单（用户检查并回答）：
   + DebugCommand 新增 debug region <高度>|default（仅 debug 开启时生效）；
   OverworldAltitudeRule 读取覆盖值（默认仍 8000）。RegionLogicTest 新增
   覆盖用例（7 断言），LogicTestSuite 总 157+。
-- 补丁7（2026-08-29 验收日志分析后）：新增 api.detect.SupportFaceSelector
+- 补丁7（2026-10-03 验收日志分析后）：新增 api.detect.SupportFaceSelector
   （按 dot(面法线, bodyUp) 取支撑面，消除平地边界幻影侧面 → 平地不再误判
   MULTIPLE）；SurfaceQuery.query(Vec3d, Vec3d bodyUp) 签名扩展，
   LevelSurfaceQuery / FootSurfaceDetector / StairSurfaceResolver 传入 bodyUp；
@@ -521,6 +521,12 @@ AI 提问清单（用户检查并回答）：
   逻辑测试 FootSurfaceLogicTest 46→55、RotationLogicTest 30+→39，
   LogicTestSuite 总 181；设备内 javac + java LogicTestSuite 181/181 通过，
   Actions run 37087294992（commit 65b2b68）./gradlew build runLogicTests 成功。
+- 补丁7 复验（2026-10-03 第二轮游戏内日志）：平地 MULTIPLE 24→0 条、
+  幻影墙面目标消失（target 仅 UP/楼梯倾斜）、防抖日志 124→0、
+  恢复竖直日志 86→0；楼梯 progress 0.00→0.40 且角度 = progress×45°。
+  仍待补测：模组楼梯 / 半砖活板门 / 进墙面 / 上下楼倒退横向。
+  观察待决定：进度上限约 0.40（≈18–21°）；台阶顶面(UP)↔斜面(~18°)
+  目标随台阶切换（阶段 6 应用身体旋转后可能呈约 1 Hz 轻微俯仰摆动）。
 ```
 
 已确认：
