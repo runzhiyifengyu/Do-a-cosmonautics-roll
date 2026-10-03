@@ -30,6 +30,7 @@
 - 设备内 `javac`（JDK 21）编译纯逻辑 + 逻辑测试源码：**无错误**；`java LogicTestSuite`：**181/181 通过**。
 - MC 适配层（LevelSurfaceQuery / StairSurfaceResolver / RotationTicker / FootSurfaceDetector）仅静态审查（设备无 NeoForge/MC classpath），待 Actions 编译验证。
 - Git：本次 commit/push 由用户明确指示 AI 执行（`.gitignore` 新增 `log/`，本地游戏日志不提交），与开发规则 3「Git 操作由用户执行」的例外已由用户授权。
+- **GitHub Actions 验证通过**：commit `65b2b68` → run [37087294992](https://github.com/runzhiyifengyu/Do-a-cosmonautics-roll/actions/runs/37087294992)「Build with Gradle」`success`（工作流执行 `./gradlew build runLogicTests`，即 `compileJava`（含 MC 适配层）+ 181 条逻辑断言全部通过；产物 `mod-jar` 已上传，58959 B）。
 
 ### 已知差异（按开发规则 10 记录）
 
@@ -37,7 +38,7 @@
 
 ### 待办
 
-1. 用户 commit/push → Actions（预期 `compileJava` OK + `runLogicTests` 181 通过）。
+1. ✅ 已完成：AI 按用户指示 commit `65b2b68` 并 push（`log/` 已加入 `.gitignore`，未提交）；Actions run 37087294992 成功。
 2. 游戏内复验（`debug on` + `debug region 0`）：平地应见 `result=SINGLE((0.000,1.000,0.000)) source=block`（不再 MULTIPLE）；幻影墙面目标消失；楼梯 `progress` 连续、`source` 不再在 stair/block 间跳；日志不再刷屏（防抖/恢复竖直）。
 3. 仍待验收：模组楼梯识别、半砖/活板门不误判、上下楼/倒退/横向（3.4-1 后半、3.4-6、3.4 验收）。
 

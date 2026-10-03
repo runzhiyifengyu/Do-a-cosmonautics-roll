@@ -317,7 +317,7 @@ AI 提问清单（用户检查并回答）：
 - 用户确认并 commit。
 - 未确认前不得进入阶段 6。
 
-当前状态：**阶段 5 实现完成（待 Actions 验证 + 游戏内验收）**。2026-08-29 完成一轮游戏内验收（日志 `log/latest_game.log`）：原版楼梯识别、progress 连续、角度公式均通过，但发现「平地误判 MULTIPLE」的阻塞性 BUG（幻影侧面法线）并已修复（补丁7：支撑面法线 + 日志降噪），设备内 181/181 逻辑测试通过。实现完成 + 纯逻辑文件编译零错误；MC 适配层仅静态审查；等待用户 push 后 Actions 验证（compileJava + runLogicTests 181），随后用户游戏内复验（平地应 SINGLE(UP)、幻影墙面消失、楼梯 source 稳定、日志不刷屏；**低空验收用 `/cosmonauticsroll debug on` + `/cosmonauticsroll debug region 0`，验收完 `region default` 恢复**）。
+当前状态：**阶段 5 实现完成（Actions 已验证，待游戏内复验）**。2026-08-29 完成一轮游戏内验收（日志 `log/latest_game.log`）：原版楼梯识别、progress 连续、角度公式均通过，但发现「平地误判 MULTIPLE」的阻塞性 BUG（幻影侧面法线）并已修复（补丁7：支撑面法线 + 日志降噪）。验证：设备内 181/181 逻辑测试通过；GitHub Actions（commit `65b2b68`，run 37087294992）`./gradlew build runLogicTests` 成功（编译含 MC 适配层 + 181 断言，mod-jar 产物已上传）。随后用户游戏内复验（平地应 SINGLE(UP)、幻影墙面消失、楼梯 source 稳定、日志不刷屏；**低空验收用 `/cosmonauticsroll debug on` + `/cosmonauticsroll debug region 0`，验收完 `region default` 恢复**）。
 
 ### 阶段 6：Do a Barrel Roll 兼容
 
@@ -519,7 +519,8 @@ AI 提问清单（用户检查并回答）：
   SmoothStandingRotation.update() 恢复完成后自动退出恢复模式。
   已知差异：方块路径「地面+墙」墙角改为 SINGLE（Sable 子世界路径仍 MULTIPLE）。
   逻辑测试 FootSurfaceLogicTest 46→55、RotationLogicTest 30+→39，
-  LogicTestSuite 总 181；设备内 javac + java LogicTestSuite 181/181 通过。
+  LogicTestSuite 总 181；设备内 javac + java LogicTestSuite 181/181 通过，
+  Actions run 37087294992（commit 65b2b68）./gradlew build runLogicTests 成功。
 ```
 
 已确认：

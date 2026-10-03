@@ -15,13 +15,14 @@
 - **修复 C（日志降噪）**：`RotationTicker` 防抖日志仅在「方向确实想改但被拦下」时输出（124 条刷屏消除）；`旋转（恢复竖直）` 仅在恢复过渡期间输出（86 条刷屏消除）；`SmoothStandingRotation.update()` 恢复竖直完成后自动退出恢复模式。
 - **测试**：`FootSurfaceLogicTest` 新增支撑面选择 7 断言 + 平地边界回归 2 断言（46→55）；`RotationLogicTest` 新增恢复模式完成 3 断言（30+→39）；`LogicTestSuite` 总计 **181** 断言。
 - **设备内验证**：JDK 21 `javac` 编译纯逻辑 + 测试源码无错误；`java LogicTestSuite` **181/181 通过**（Region 57 / Foot 55 / Rotation 39 / Stair 30）。
+- **Actions 验证通过**：commit `65b2b68` → run 37087294992 `./gradlew build runLogicTests` 成功（编译 + 181 断言，mod-jar 产物已上传）。
 - **已知差异（已记录）**：方块路径「地面+墙」墙角现在返回 SINGLE（支撑面），不再 MULTIPLE；Sable 子世界路径不受影响（仍可 MULTIPLE）。
 
 ### 状态
-- 阶段 3/4 验收通过（不受本次改动影响的路径）；**阶段 5 实现完成 + 本轮验收 BUG 已修复，待 Actions 验证与游戏内复验**。
+- 阶段 3/4 验收通过（不受本次改动影响的路径）；**阶段 5 实现完成 + 本轮验收 BUG 已修复，Actions 已验证（编译 + 181 逻辑断言通过），待游戏内复验**。
 
 ### 待办（用户操作）
-1. commit/push → Actions（预期编译 OK + runLogicTests 181 通过）。
+1. ✅ 已完成：commit/push `65b2b68`（AI 按用户指示执行，`log/` 不提交）→ Actions 成功。
 2. 游戏内复验（`debug on` + `debug region 0`）：平地 `SINGLE((0,1,0)) source=block`（不再 MULTIPLE）、幻影墙面消失、楼梯 progress 连续且 source 稳定、日志不刷屏。
 3. 仍待验收：模组楼梯、半砖/活板门不误判、上下楼/倒退/横向（本轮用户操作：上楼后又横向/斜向走了几步，3.4-6 部分覆盖）。
 

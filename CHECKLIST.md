@@ -196,7 +196,7 @@
 > | 3.4-验收 普通完整方块仍普通判断 | ❌ 不通过 | 连续平地（全 oak_planks）被判 `MULTIPLE source=block`（34 条脚部检测中 24 条，L963 等），根因=幻影侧面法线 |
 > | 3.4-验收 半砖/活板门不当作楼梯 | ⚠ 未覆盖 | 本轮日志未出现半砖/活板门 |
 >
-> **根因与修复（补丁7）**：`LevelSurfaceQuery` 原按「最近轴向面」判定，采样点下沉 0.1 格靠近平地竖直边界时返回侧面 → 平地 MULTIPLE + 幻影墙面 + 楼梯判定跳变。已改为按 `dot(面法线, bodyUp)` 取支撑面（新增纯逻辑 `api/detect/SupportFaceSelector`，`SurfaceQuery` 签名扩展传入 bodyUp），并同步降噪日志（防抖/恢复竖直）。设备内 181/181 逻辑测试通过。
+> **根因与修复（补丁7）**：`LevelSurfaceQuery` 原按「最近轴向面」判定，采样点下沉 0.1 格靠近平地竖直边界时返回侧面 → 平地 MULTIPLE + 幻影墙面 + 楼梯判定跳变。已改为按 `dot(面法线, bodyUp)` 取支撑面（新增纯逻辑 `api/detect/SupportFaceSelector`，`SurfaceQuery` 签名扩展传入 bodyUp），并同步降噪日志（防抖/恢复竖直）。设备内 181/181 逻辑测试通过；**GitHub Actions（commit `65b2b68`，run 37087294992）`./gradlew build runLogicTests` 成功**（编译 + 181 断言）。
 >
 > **已知差异（开发规则 10）**：方块路径「地面 + 墙面」墙角现返回 SINGLE（支撑面），不再 MULTIPLE；Sable 子世界路径不受影响（仍可 MULTIPLE）。如需在方块路径恢复墙角 MULTIPLE 语义，需追加「脚底平面水平探测」B 方案。
 >
