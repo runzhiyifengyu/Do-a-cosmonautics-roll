@@ -31,12 +31,12 @@
 ### 验证状态
 
 - 设备内 JDK 21 `javac` 编译纯逻辑 + 逻辑测试源码：**无错误**；`java LogicTestSuite`：**215/215 通过**（Region 57 / Foot 89 / Rotation 39 / Stair 30）。
-- MC 适配层（`PlayerMoveTracker` / `FootSurfaceResolver` / `RotationTicker`）静态审查无语法错误，待 Actions 编译验证。
+- MC 适配层（`PlayerMoveTracker` / `FootSurfaceResolver` / `RotationTicker`）静态审查无语法错误；**GitHub Actions 验证通过**：commit `960d7da` → run [37185892663](https://github.com/runzhiyifengyu/Do-a-cosmonautics-roll/actions/runs/37185892663) `./gradlew build runLogicTests` **success**（编译含 MC 适配层 + 215 断言，`mod-jar` 产物已上传）。
 - 已由 AI 提交推送（用户授权 AI 执行 Git；`log/` 不提交）。
 
 ### 待办
 
-1. Actions 验证（预期 `compileJava` OK + `runLogicTests` 215 通过）。
+1. ✅ Actions 已验证（run 37185892663 成功）。
 2. **第四轮游戏内复验（重点：走向墙面）**：面对 1 格以上高的墙**按住前进**走过去 → 应出现 `result=SINGLE((水平法线)) source=block`、`旋转` target 变水平；停下不动（或从未走向它）应保持 `MULTIPLE`/UP。
 3. 仍未覆盖：模组楼梯（3.4-1 后半）、半砖/活板门不误判（本轮只有 Create 座椅矮方块）、楼梯尽头有墙时 progress 停止推进（3.4-4）、上下楼/倒退/横向确认（3.4-6）、离开区域恢复竖直。
 

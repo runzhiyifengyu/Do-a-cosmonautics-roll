@@ -325,6 +325,7 @@ AI 提问清单（用户检查并回答）：
   - 根因：① 服务端玩家的 `entity.xo/zo` 在实体 tick 内基本等于当前位置，取不到客户端行走位移；② 玩家贴住墙后位移本来就是 0，而脚踝探测只在贴墙时才命中，两者时间重合。
   - 修复：新增纯逻辑 `api/detect/MovementIntentTracker`（每 tick 自行求差、同一 tick 重复调用返回同一结果、单 tick 位移 > 1.0 视为传送并丢弃意图、`intent(tick, window)` 窗口内保留最近真实移动）+ 游戏内适配 `detect/PlayerMoveTracker`（按 UUID，`INTENT_WINDOW_TICKS = 10` ≈ 0.5 秒）；`FootSurfaceResolver` 改用移动意图（弃用 `xo/zo`）；`RotationTicker` 登出/重置时清理跟踪器；脚踝探测调试标签修正为身体坐标系（前/后/左/右）。
   - 测试：`FootSurfaceLogicTest` 新增 `testMovementIntent`（11 断言），78 → **89**；LogicTestSuite 总 **215**，设备内 `javac` + `java LogicTestSuite` **215/215 通过**。
+  - Actions 验证通过：commit `960d7da` → run 37185892663 `./gradlew build runLogicTests` 成功（编译含 MC 适配层 + 215 断言）。
 
 出口条件：
 

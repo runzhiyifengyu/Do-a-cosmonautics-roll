@@ -18,6 +18,7 @@
   - `FootSurfaceResolver` 改用移动意图（弃用 `xo/zo`）；`RotationTicker` 登出/重置时清理跟踪器。
   - 脚踝探测调试标签修正为身体坐标系（前/后/左/右）。
   - `FootSurfaceLogicTest` 78 → **89** 断言（移动意图 11），LogicTestSuite 总 **215**；设备内 `javac` + `java LogicTestSuite` **215/215 通过**。
+  - **Actions 验证通过**：commit `960d7da` → run 37185892663 `./gradlew build runLogicTests` 成功（编译含 MC 适配层 + 215 断言）。
 
 ### 状态
 - 阶段 5：补丁7/8 已复验；**补丁9 待 Actions 验证 + 第四轮游戏内复验**（重点：面朝墙按住前进走过去，target 应变水平）。

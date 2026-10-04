@@ -253,7 +253,7 @@
 >
 > **走向墙面未触发的根因（补丁9 修复）**：① 服务端玩家的 `entity.xo/zo` 在实体 tick 内基本等于当前位置，取不到客户端行走位移；② 即便取到，玩家贴住墙后位移本来就是 0，而脚踝探测只在贴墙时才命中——两者时间重合。修复：新增 `api/detect/MovementIntentTracker`（纯逻辑：每 tick 求差 + 传送丢弃 + 窗口内保留最近真实移动）与 `detect/PlayerMoveTracker`（按 UUID，窗口 10 tick ≈ 0.5 s），`FootSurfaceResolver` 改用移动意图；顺带把脚踝探测日志标签改为身体坐标系（前/后/左/右）。
 >
-> **补丁9 待第四轮复验（用户）**：面朝 1 格以上高的墙**按住前进**走过去 → 应出现 `result=SINGLE((水平法线)) source=block` 与水平 target；停下不动应保持 `MULTIPLE`。设备内逻辑测试 **215/215 通过**（Foot 78→89）。
+> **补丁9 待第四轮复验（用户）**：面朝 1 格以上高的墙**按住前进**走过去 → 应出现 `result=SINGLE((水平法线)) source=block` 与水平 target；停下不动应保持 `MULTIPLE`。设备内逻辑测试 **215/215 通过**（Foot 78→89）；**GitHub Actions 验证通过**（commit `960d7da`，run 37185892663，编译 + 215 断言）。
 
 ---
 
