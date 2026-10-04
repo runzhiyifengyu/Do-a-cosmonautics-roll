@@ -4,6 +4,7 @@ import dev.cosmonauticsroll.api.detect.Vec3d;
 import dev.cosmonauticsroll.api.rot.RotationSmoother;
 import dev.cosmonauticsroll.debug.Debug;
 import dev.cosmonauticsroll.detect.FootSurfaceResolver;
+import dev.cosmonauticsroll.detect.PlayerMoveTracker;
 import dev.cosmonauticsroll.region.RegionStateMachine;
 import dev.cosmonauticsroll.region.RegionRules;
 
@@ -173,10 +174,13 @@ public final class RotationTicker {
     /** 玩家退出：清理状态实例，防止内存堆积。 */
     @SubscribeEvent
     public static void onPlayerLoggedOut(PlayerEvent.PlayerLoggedOutEvent event) {
-        PLAYERS.remove(event.getEntity().getUUID());
+        UUID uuid = event.getEntity().getUUID();
+        PLAYERS.remove(uuid);
+        PlayerMoveTracker.reset(uuid);
     }
 
     private static void resetPlayer(UUID uuid, String reason) {
+        PlayerMoveTracker.reset(uuid);
         PlayerRotationState state = PLAYERS.get(uuid);
         if (state != null) {
             state.rotation.reset();

@@ -320,6 +320,11 @@ AI 提问清单（用户检查并回答）：
   - 测试：`FootSurfaceLogicTest` 55→78 断言（脚踝探测布局 8 + 墙面探测/走向墙面 15）；LogicTestSuite 总 **204**；设备内 `javac` 编译 + `java LogicTestSuite` 运行 **204/204 通过**。
   - 已知差异更新：方块路径的「地面 + 墙面」墙角现在能产生真实 MULTIPLE（补丁7 的差异已由补丁8 补回）；「走向墙面」在**移动时**允许过渡到墙面（静止时保持 MULTIPLE，符合 PRD 3.2-5）。
   - Actions 验证通过：commit `0925474` → run 37090382318 `./gradlew build runLogicTests` 成功（编译含 MC 适配层 + 204 断言）。
+- **移动意图跟踪（补丁9，2026-10-04：第三轮验收发现「走向墙面」过渡从未触发）**：
+  - 第三轮日志（`log/latest_game.log`，1412 行 / 522 条 `[Debug]`）：脚踝墙面探测**生效**（3 次整方块墙接触 → `MULTIPLE`）、`create:red_seat` 矮方块仍 `SINGLE(UP)`、楼梯 progress `0.00→0.47` 正常、`防抖`/`恢复竖直` 均 0；但 98 条 `旋转` 的 target 全为 UP/楼梯倾斜——**走向墙面过渡一次未触发**。
+  - 根因：① 服务端玩家的 `entity.xo/zo` 在实体 tick 内基本等于当前位置，取不到客户端行走位移；② 玩家贴住墙后位移本来就是 0，而脚踝探测只在贴墙时才命中，两者时间重合。
+  - 修复：新增纯逻辑 `api/detect/MovementIntentTracker`（每 tick 自行求差、同一 tick 重复调用返回同一结果、单 tick 位移 > 1.0 视为传送并丢弃意图、`intent(tick, window)` 窗口内保留最近真实移动）+ 游戏内适配 `detect/PlayerMoveTracker`（按 UUID，`INTENT_WINDOW_TICKS = 10` ≈ 0.5 秒）；`FootSurfaceResolver` 改用移动意图（弃用 `xo/zo`）；`RotationTicker` 登出/重置时清理跟踪器；脚踝探测调试标签修正为身体坐标系（前/后/左/右）。
+  - 测试：`FootSurfaceLogicTest` 新增 `testMovementIntent`（11 断言），78 → **89**；LogicTestSuite 总 **215**，设备内 `javac` + `java LogicTestSuite` **215/215 通过**。
 
 出口条件：
 
@@ -327,7 +332,7 @@ AI 提问清单（用户检查并回答）：
 - 用户确认并 commit。
 - 未确认前不得进入阶段 6。
 
-当前状态：**阶段 5 实现完成 + 补丁7 复验通过 + 补丁8（脚踝墙面探测）待游戏内复验**。2026-10-03 两轮游戏内验收（日志 `log/latest_game.log`）：第一轮发现「平地误判 MULTIPLE / 幻影墙面 / 日志刷屏」的阻塞性 BUG，已修复（补丁7：支撑面法线 + 日志降噪）；第二轮复验确认消除——18 条脚部检测中 `MULTIPLE` 由 24 条降至 **0 条**、13 条 `SINGLE((0,1,0)) source=block`、楼梯进度 `0.00→…→0.40` 且角度 = `progress×45°`、`防抖` 日志 124→0、`恢复竖直` 86→0。补丁8 补上「普通方块看不到墙」的缺口（脚踝水平探测 + 走向墙面过渡）。验证：设备内 **204/204** 逻辑测试通过；GitHub Actions（commit `65b2b68`，run 37087294992）`./gradlew build runLogicTests` 成功（补丁8 待 Actions 复验）。仍待补测：模组楼梯、半砖/活板门不误判、楼梯尽头进墙面（3.4-4，补丁8 后才有触发条件）、上下楼/倒退/横向（3.4-6）、地面→墙面（2.4/3.3-2，补丁8 后普通方块可测）；另有 2 项观察待决定（进度上限约 0.40 ≈ 18–21°、台阶顶面/斜面目标随台阶切换）。**低空验收用 `/cosmonauticsroll debug on` + `/cosmonauticsroll debug region 0`，验收完 `region default` 恢复**。
+当前状态：**阶段 5 实现完成 + 补丁7/8 复验通过 + 补丁9（移动意图跟踪）待 Actions 与第四轮游戏内复验**。2026-10-03 两轮验收修复了「平地误判 MULTIPLE / 幻影墙面 / 日志刷屏」（补丁7）；2026-10-04 第三轮验收确认脚踝墙面探测生效（整方块墙接触 → MULTIPLE、矮方块仍 SINGLE(UP)、楼梯与日志正常），但发现「走向墙面」过渡从未触发，根因是服务端取不到客户端行走位移且贴墙后位移为 0，已由补丁9（`MovementIntentTracker` + `PlayerMoveTracker`，窗口 10 tick）修复。验证：设备内 **215/215** 逻辑测试通过。仍待补测：走向墙面（第四轮重点）、模组楼梯、半砖/活板门、楼梯尽头有墙时 progress 停止（3.4-4）、上下楼/倒退/横向（3.4-6）。**低空验收用 `/cosmonauticsroll debug on` + `/cosmonauticsroll debug region 0`，验收完 `region default` 恢复**。
 
 ### 阶段 6：Do a Barrel Roll 兼容
 
@@ -543,7 +548,15 @@ AI 提问清单（用户检查并回答）：
   （支撑面 + 单一墙面 + 正走向墙面 → 返回墙面方向，PRD 2.4 地面→墙面；
   静止/背离仍 MULTIPLE）。StairSurfaceResolver 墙面优先改用脚踝探测且
   只取前方 ±60° 锥（侧墙不误停楼梯倾斜）。FootSurfaceLogicTest 55→78，
-  LogicTestSuite 总 204，设备内 204/204 通过；待 Actions + 游戏内复验。
+  LogicTestSuite 总 204，设备内 204/204 通过；Actions run 37090382318
+  （commit 0925474）成功。
+- 补丁9（2026-10-04 第三轮验收）：脚踝墙面探测生效（整方块墙 → MULTIPLE、
+  create:red_seat 矮方块仍 SINGLE(UP)、楼梯与日志正常），但「走向墙面」
+  一次未触发（服务端 xo/zo 取不到客户端位移；贴墙后位移为 0）。
+  修复：api.detect.MovementIntentTracker（纯逻辑，窗口内保留最近真实移动）
+  + detect.PlayerMoveTracker（按 UUID，窗口 10 tick）；FootSurfaceResolver
+  改用移动意图；脚踝探测日志标签改为身体坐标系。FootSurfaceLogicTest
+  78→89，LogicTestSuite 总 215，设备内 215/215 通过；待 Actions + 第四轮复验。
 ```
 
 已确认：

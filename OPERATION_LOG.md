@@ -7,6 +7,41 @@
 
 ---
 
+## 2026-10-04（阶段 5 补丁9：第三轮验收日志分析 + 移动意图跟踪修复）
+
+### 本次操作内容
+
+1. **背景**：用户完成第三轮游戏内验收（补丁8 构建），日志覆盖写入 `log/latest_game.log`（1412 行 / 522 条 `[Debug]`，15:20:19–15:22:38）。
+2. **第三轮日志结论（通过项）**：
+   - **脚踝墙面探测生效**：3 次真实墙接触（整方块 `oak_planks`，`脚踝探测` 命中日志）→ `result=MULTIPLE`（支撑面 UP + 墙面法线），贴墙/非走向墙面时不判定站立 ✓。
+   - **矮方块不误判**：`create:red_seat`（Create 座椅）处 6 个支撑采样 + 4 个探测点都在方块内，结果仍 `SINGLE((0.000,1.000,0.000)) source=block` ✓（既不算楼梯也不算墙）。
+   - **楼梯正常**：57 条 `楼梯：`，progress `0.00→0.47`，7 次 `source=stair` 快照；角度 = `progress×45°`。
+   - **日志不刷屏**：`防抖` 0 条、`恢复竖直` 0 条。49 条脚部检测 = 44 SINGLE / 3 MULTIPLE / 2 NONE（无异常、无崩溃）。
+3. **第三轮未通过项**：**「走向墙面」过渡一次都没触发**（98 条 `旋转` 的 target 全为 UP 或楼梯倾斜）。代码审查定位两个原因：
+   - 服务端玩家的 `entity.xo/zo` 在实体 tick 内基本等于当前位置，取不到客户端行走位移 → 补丁8 的 `isMovingIntoWall` 恒为 false；
+   - 即便能取到位移，玩家贴住墙后位移本来就是 0——而脚踝探测恰恰只在贴墙时才命中，两者时间上重合。
+4. **补丁9 修复**：
+   - 新增纯逻辑 `api/detect/MovementIntentTracker`：每 tick 自行求差（同一 tick 重复调用返回同一结果）+ 单 tick 位移 > 1.0 视为传送并丢弃意图 + `intent(tick, window)` 在窗口内保留「最近一次真实移动」。
+   - 新增游戏内适配 `detect/PlayerMoveTracker`：按玩家 UUID 维护跟踪器，窗口 `INTENT_WINDOW_TICKS = 10`（约 0.5 秒），登出/维度切换/死亡重生成清。
+   - `FootSurfaceResolver` 改用移动意图（不再使用 `xo/zo`）；`RotationTicker` 在 logout 与 reset 时清理跟踪器。
+   - 修正脚踝探测调试标签：改为身体坐标系（前/后/左/右），此前按世界轴命名，身体转向后容易读错。
+   - 测试：`FootSurfaceLogicTest` 新增 `testMovementIntent`（11 断言：首次无位移、位移记录、窗口内保留意图、窗口外归零、同 tick 重复一致、传送丢弃、reset），78 → **89** 断言；LogicTestSuite 总 **215**。
+5. **文档同步**：`CHECKLIST.md` 新增第三轮验证记录与补丁9 待验收项；`PROGRESS.md` 新增本条目；`DEVELOPMENT.md` 阶段 5 补丁9 说明与当前状态。
+
+### 验证状态
+
+- 设备内 JDK 21 `javac` 编译纯逻辑 + 逻辑测试源码：**无错误**；`java LogicTestSuite`：**215/215 通过**（Region 57 / Foot 89 / Rotation 39 / Stair 30）。
+- MC 适配层（`PlayerMoveTracker` / `FootSurfaceResolver` / `RotationTicker`）静态审查无语法错误，待 Actions 编译验证。
+- 已由 AI 提交推送（用户授权 AI 执行 Git；`log/` 不提交）。
+
+### 待办
+
+1. Actions 验证（预期 `compileJava` OK + `runLogicTests` 215 通过）。
+2. **第四轮游戏内复验（重点：走向墙面）**：面对 1 格以上高的墙**按住前进**走过去 → 应出现 `result=SINGLE((水平法线)) source=block`、`旋转` target 变水平；停下不动（或从未走向它）应保持 `MULTIPLE`/UP。
+3. 仍未覆盖：模组楼梯（3.4-1 后半）、半砖/活板门不误判（本轮只有 Create 座椅矮方块）、楼梯尽头有墙时 progress 停止推进（3.4-4）、上下楼/倒退/横向确认（3.4-6）、离开区域恢复竖直。
+
+---
+
 ## 2026-10-03（阶段 5 补丁8：脚踝水平墙面探测 + 走向墙面过渡）
 
 ### 本次操作内容

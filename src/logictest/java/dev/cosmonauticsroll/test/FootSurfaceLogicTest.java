@@ -1,6 +1,7 @@
 package dev.cosmonauticsroll.test;
 
 import dev.cosmonauticsroll.api.detect.FootSurfaceResult;
+import dev.cosmonauticsroll.api.detect.MovementIntentTracker;
 import dev.cosmonauticsroll.api.detect.SupportFaceSelector;
 import dev.cosmonauticsroll.api.detect.SurfaceNormal;
 import dev.cosmonauticsroll.api.detect.SurfaceQuery;
@@ -44,6 +45,7 @@ public final class FootSurfaceLogicTest {
         testFlatGroundBoundaryRegression();
         testAnkleProbeLayout();
         testWallProbeDetection();
+        testMovementIntent();
 
         System.out.println("----------------------------------------");
         System.out.println("通过: " + passed + "  失败: " + failed);
@@ -424,6 +426,40 @@ public final class FootSurfaceLogicTest {
         for (Vec3d p : probed) {
             check("探测点在脚踝高度 y∈[0.2,0.4]", p.y >= 0.2 - 1.0e-6 && p.y <= 0.4 + 1.0e-6);
         }
+    }
+
+    /**
+     * 阶段 5 补丁9：移动意图跟踪——玩家贴住墙后位移为 0，但窗口内保留
+     * 「最近一次真实移动」，使「走向墙面」过渡仍能触发（PRD 2.4）。
+     */
+    private static void testMovementIntent() {
+        System.out.println("-- 移动意图跟踪 --");
+        MovementIntentTracker tracker = new MovementIntentTracker();
+
+        check("首次无位移", tracker.update(0, 0.0, 0.0).length() == 0.0);
+        check("首次无意图", tracker.intent(0, 10).length() == 0.0);
+
+        Vec3d walked = tracker.update(1, 0.2, 0.0);
+        check("第二 tick 记录位移", Math.abs(walked.x - 0.2) < 1.0e-9);
+        check("意图 = 当前位移", Math.abs(tracker.intent(1, 10).x - 0.2) < 1.0e-9);
+
+        // 被墙挡住：位置不再变化（位移 0），窗口内意图保留 → 过渡仍可触发
+        tracker.update(2, 0.2, 0.0);
+        check("贴墙后本 tick 位移为 0", tracker.update(2, 0.2, 0.0).length() == 0.0);
+        check("窗口内保留移动意图", Math.abs(tracker.intent(11, 10).x - 0.2) < 1.0e-9);
+        check("窗口外意图归零", tracker.intent(12, 10).length() == 0.0);
+
+        // 同一 tick 重复更新返回同一结果（两个 ticker 共用不互相清零）
+        check("同一 tick 重复更新结果一致",
+                Math.abs(tracker.update(20, 1.0, 0.0).x - tracker.update(20, 1.0, 0.0).x) < 1.0e-9);
+
+        // 传送/切换维度（位移过大）：丢弃意图
+        Vec3d teleport = tracker.update(30, 9.0, 0.0);
+        check("位移过大视为传送（返回 0）", teleport.length() == 0.0);
+        check("传送后意图归零", tracker.intent(30, 10).length() == 0.0);
+
+        tracker.reset();
+        check("reset 后无意图", tracker.intent(31, 10).length() == 0.0);
     }
 
     private static void check(String name, boolean condition) {

@@ -133,10 +133,12 @@ public final class FootSurfaceResolver {
         return new Vec3d((box.minX + box.maxX) / 2.0, box.minY, (box.minZ + box.maxZ) / 2.0);
     }
 
-    /** 玩家本 tick 水平移动向量（格/tick）；{@code xo}/{@code zo} 为上一 tick 位置。
-     *  仅用于「支撑面 + 单一墙面」时判断玩家是否正走向墙面（PRD 2.4）。 */
-    private static Vec3d moveDirection(Entity entity) {
-        return new Vec3d(entity.getX() - entity.xo, 0.0, entity.getZ() - entity.zo);
+    /** 玩家本 tick 水平移动意图（格/tick）。玩家贴住墙后位移本来就是 0，
+     *  因此由 {@link PlayerMoveTracker} 用「每 tick 自行求差 + 窗口内保留最近
+     *  真实移动」给出意图（补丁9）；仅用于「支撑面 + 单一墙面」时判断玩家
+     *  是否正走向墙面（PRD 2.4 地面→墙面平滑旋转）。 */
+    private static Vec3d moveDirection(ServerPlayer player) {
+        return PlayerMoveTracker.intentMovement(player);
     }
 
     /** 身体朝前方向（仅用偏航角）：0° = 朝南 +Z，顺时针为正。 */
@@ -163,7 +165,7 @@ public final class FootSurfaceResolver {
         for (FootSamplingLayout.WallProbe probe : FootSamplingLayout.ankleProbes()) {
             Vec3d sample = footCenter.add(probe.worldOffset(bodyUp, bodyForward));
             if (isSolidAt(level, sample)) {
-                logBlockAt(level, "脚踝探测" + axisLabel(probe.outward(bodyUp, bodyForward)), sample);
+                logBlockAt(level, "脚踝探测" + probeLabel(probe), sample);
             }
         }
     }
@@ -174,12 +176,13 @@ public final class FootSurfaceResolver {
         return !level.getBlockState(pos).getCollisionShape(level, pos).isEmpty();
     }
 
-    /** 外向方向的简短标签（调试日志用）。 */
-    private static String axisLabel(Vec3d outward) {
-        if (Math.abs(outward.x) >= Math.abs(outward.z)) {
-            return outward.x >= 0 ? "[+右]" : "[-右]";
+    /** 探测方向的简短标签（调试日志用；身体坐标系：前/后/左/右，
+     *  补丁9 修正：此前按世界轴命名，身体转向后容易读错）。 */
+    private static String probeLabel(FootSamplingLayout.WallProbe probe) {
+        if (Math.abs(probe.outRight) >= Math.abs(probe.outForward)) {
+            return probe.outRight >= 0 ? "[+右]" : "[-右]";
         }
-        return outward.z >= 0 ? "[+前]" : "[-前]";
+        return probe.outForward >= 0 ? "[+前]" : "[-前]";
     }
 
     private static void logBlockAt(Level level, String label, Vec3d p) {
