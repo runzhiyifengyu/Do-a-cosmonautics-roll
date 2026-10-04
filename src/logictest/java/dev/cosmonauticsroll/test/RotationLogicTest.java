@@ -31,6 +31,7 @@ public final class RotationLogicTest {
         testFastLeaveKeepsDirection();
         testLeaveRegionRestoresVertical();
         testLeaveRegionCompletes();
+        testWallTransitionLatch();
         testReset();
         testStandingDirectionState();
         testSmootherMath();
@@ -224,6 +225,53 @@ public final class RotationLogicTest {
         check("恢复竖直后退出恢复模式", !rotation.isLeaving());
         check("恢复阶段平滑（>1 tick）", ticks > 1);
         check("退出时已回到竖直", angle(rotation.current(), new Vec3d(0, 1, 0)) < 1e-6);
+    }
+
+    /**
+     * 阶段 5 补丁10：墙面过渡锁定——「走向墙面」进入过渡后，只要脚部仍接触墙面
+     * （后续 tick 为 MULTIPLE = 支撑面 + 墙面）就保持墙面目标，不被支撑面或
+     * 楼梯倾斜抢回（2026-10-04 第四轮日志：target 在墙面/楼梯倾斜间反复切换）。
+     */
+    private static void testWallTransitionLatch() {
+        System.out.println("-- 墙面过渡锁定 --");
+        SmoothStandingRotation rotation = new SmoothStandingRotation();
+        Vec3d west = new Vec3d(-1, 0, 0);
+
+        // 走向墙面：探测器给出 SINGLE(水平法线) → 锁定墙面
+        rotation.setTarget(FootSurfaceResult.singleDirection(west));
+        check("墙面过渡被锁定", rotation.isWallLatched());
+        check("目标 = 墙面方向", angle(rotation.target(), west) < 1.0e-9);
+
+        // 后续 tick 为 MULTIPLE（支撑面 + 墙面）：保持墙面目标，不被 UP 抢回
+        for (int i = 0; i < 10; i++) {
+            rotation.setTarget(FootSurfaceResult.multiple());
+            rotation.update();
+        }
+        check("MULTIPLE 期间保持墙面目标", angle(rotation.target(), west) < 1.0e-9);
+        check("身体朝墙面方向转动（>30°）", angle(rotation.current(), west) < Math.toRadians(60.0));
+
+        // 锁定期间楼梯倾斜不得抢回目标（PRD 3.4-4 墙面优先）
+        double before = angle(rotation.target(), west);
+        boolean stairAccepted = rotation.setStairTarget(
+                new dev.cosmonauticsroll.api.detect.StairProgress(
+                        new Vec3d(0, 0, -1), 1.0,
+                        dev.cosmonauticsroll.api.detect.StairInfo.Facing.NORTH));
+        check("锁定期间楼梯目标被拒绝", !stairAccepted);
+        check("楼梯目标未改变墙面目标", angle(rotation.target(), west) <= before + 1.0e-9);
+
+        // 墙面接触消失（支撑面 SINGLE(UP)）→ 解除锁定，恢复地面目标
+        rotation.setTarget(FootSurfaceResult.singleDirection(new Vec3d(0, 1, 0)));
+        check("墙面接触消失后解除锁定", !rotation.isWallLatched());
+        for (int i = 0; i < 200; i++) {
+            rotation.setTarget(FootSurfaceResult.singleDirection(new Vec3d(0, 1, 0)));
+            rotation.update();
+        }
+        check("解除后回到竖直", angle(rotation.current(), new Vec3d(0, 1, 0)) < 1.0e-6);
+
+        // reset 清除锁定
+        rotation.setTarget(FootSurfaceResult.singleDirection(west));
+        rotation.reset();
+        check("reset 清除墙面锁定", !rotation.isWallLatched());
     }
 
     /** 重置：立即回到竖直（传送/死亡重生，无需平滑）。 */

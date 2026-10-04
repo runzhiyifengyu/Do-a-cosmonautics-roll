@@ -137,8 +137,8 @@ public final class RotationTicker {
             if (!accepted && wanted != null
                     && RotationSmoother.angleRadians(wanted, state.rotation.target())
                     > RotationSmoother.DEFAULT_DEAD_ZONE_RADIANS) {
-                Debug.log(Debug.CATEGORY_ROTATION, "防抖：目标被忽略 target={} current={} player={}",
-                        state.rotation.target(), state.rotation.current(),
+                Debug.log(Debug.CATEGORY_ROTATION, "防抖：方向变化被忽略 wanted={} target={} current={} player={}",
+                        wanted, state.rotation.target(), state.rotation.current(),
                         player.getGameProfile().getName());
             }
             Vec3d current = state.rotation.update(); // 每 tick 推进一次平滑过渡

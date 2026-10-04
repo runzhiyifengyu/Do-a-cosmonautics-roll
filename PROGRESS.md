@@ -5,6 +5,25 @@
 
 ---
 
+## 2026-10-04（阶段 5 补丁10：第四轮验收 —— 过渡已启动但不持续，补「墙面过渡锁定」）
+
+### 完成
+- **第四轮游戏内验收日志分析**（`log/latest_game.log`，1131 行 / 241 条 `[Debug]`，15:33:43–15:35:38）：
+  - ✅ **补丁9 生效**：`result=SINGLE((0.000,0.000,1.000)) source=block` → `target=(0.000,0.000,1.000)` → `current` 朝墙面转动（0.052→0.276 ≈ 16°）；脚踝探测命中 4 次（含 `+前` 命中 `oak_planks` 墙）；矮方块仍 `SINGLE((0,1,0))`；楼梯/日志正常；无崩溃。
+  - ❌ **过渡不持续**：`current` 到 16° 就回弹，`target` 在「墙面」与「楼梯倾斜」间反复切换（8 条防抖日志）。
+- **根因**：过渡启动后，后续 tick 的 `MULTIPLE`/`SINGLE(UP)`/楼梯结果会把目标抢回；贴墙不动时移动意图 10 tick 后还会过期。
+- **补丁10（墙面过渡锁定）**：`rot/SmoothStandingRotation` 新增 `latchedWall`——收到 `SINGLE(水平)` 即锁定；锁定期间 `MULTIPLE` 保持墙面目标、`setStairTarget` 直接拒绝（PRD 3.4-4 墙面优先）；收到 `SINGLE(支撑面)`/`NONE` 解除；`leaveRegion/reset` 清除。`RotationTicker` 防抖日志补打 `wanted`。
+- **测试**：`RotationLogicTest` 新增 `testWallTransitionLatch`（9 断言），39 → **48**；LogicTestSuite 总 **224**；设备内 `javac` + `java LogicTestSuite` **224/224 通过**。
+
+### 状态
+- 阶段 5：补丁7~9 已验证；**补丁10 待 Actions + 第五轮游戏内复验**（重点：按住前进贴墙 2–3 秒，`current` 应连续转到约 90° 不回弹）。
+
+### 待办（用户操作）
+1. 第五轮复验：面朝 1 格以上高的墙按住前进 → `target` 稳定水平、`current` 连续转到约 90°；停下保持；走离后回 `SINGLE(UP)` 并转回竖直。
+2. 仍未覆盖：模组楼梯、原版半砖/活板门、楼梯尽头 progress 停止、上下楼/倒退/横向。
+
+---
+
 ## 2026-10-04（阶段 5 补丁9：第三轮验收 —— 墙面探测生效、走向墙面过渡修复）
 
 ### 完成

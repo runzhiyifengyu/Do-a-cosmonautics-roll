@@ -326,6 +326,11 @@ AI 提问清单（用户检查并回答）：
   - 修复：新增纯逻辑 `api/detect/MovementIntentTracker`（每 tick 自行求差、同一 tick 重复调用返回同一结果、单 tick 位移 > 1.0 视为传送并丢弃意图、`intent(tick, window)` 窗口内保留最近真实移动）+ 游戏内适配 `detect/PlayerMoveTracker`（按 UUID，`INTENT_WINDOW_TICKS = 10` ≈ 0.5 秒）；`FootSurfaceResolver` 改用移动意图（弃用 `xo/zo`）；`RotationTicker` 登出/重置时清理跟踪器；脚踝探测调试标签修正为身体坐标系（前/后/左/右）。
   - 测试：`FootSurfaceLogicTest` 新增 `testMovementIntent`（11 断言），78 → **89**；LogicTestSuite 总 **215**，设备内 `javac` + `java LogicTestSuite` **215/215 通过**。
   - Actions 验证通过：commit `960d7da` → run 37185892663 `./gradlew build runLogicTests` 成功（编译含 MC 适配层 + 215 断言）。
+- **墙面过渡锁定（补丁10，2026-10-04：第四轮验收发现过渡启动后不持续）**：
+  - 第四轮日志：补丁9 生效——`result=SINGLE((0,0,1)) source=block` → `target=(0,0,1)` → `current` 朝墙面转到约 16°；脚踝探测命中 4 次（含整方块墙）；矮方块仍 `SINGLE(UP)`；楼梯与日志正常。但 `current` 到 16° 就回弹，`target` 在「墙面」与「楼梯倾斜/UP」之间反复切换（8 条防抖日志）。
+  - 根因：过渡启动后后续 tick 的 `MULTIPLE` / `SINGLE(UP)` / 楼梯结果会把目标抢回；贴墙不动时移动意图 10 tick 后过期。
+  - 修复：`rot/SmoothStandingRotation` 新增 `latchedWall` 墙面过渡锁定——`setTarget` 收到 `SINGLE(水平法线)` 即锁定并把目标设为该墙面；锁定期间收到 `MULTIPLE` 继续 `setTarget(latchedWall)`（不被支撑面抢回）、`setStairTarget` 直接返回 false（PRD 3.4-4 墙面优先）；收到 `SINGLE(支撑面)`/`NONE` 解除锁定；`leaveRegion()`/`reset()` 清除。新增 `isWallLatched()`/`latchedWall()` 供测试；`RotationTicker` 防抖日志补打 `wanted`（原日志只打 target，易误读为「target 被忽略」）。
+  - 测试：`RotationLogicTest` 新增 `testWallTransitionLatch`（9 断言），39 → **48**；LogicTestSuite 总 **224**，设备内 `javac` + `java LogicTestSuite` **224/224 通过**。
 
 出口条件：
 
@@ -333,7 +338,7 @@ AI 提问清单（用户检查并回答）：
 - 用户确认并 commit。
 - 未确认前不得进入阶段 6。
 
-当前状态：**阶段 5 实现完成 + 补丁7/8 复验通过 + 补丁9（移动意图跟踪）待 Actions 与第四轮游戏内复验**。2026-10-03 两轮验收修复了「平地误判 MULTIPLE / 幻影墙面 / 日志刷屏」（补丁7）；2026-10-04 第三轮验收确认脚踝墙面探测生效（整方块墙接触 → MULTIPLE、矮方块仍 SINGLE(UP)、楼梯与日志正常），但发现「走向墙面」过渡从未触发，根因是服务端取不到客户端行走位移且贴墙后位移为 0，已由补丁9（`MovementIntentTracker` + `PlayerMoveTracker`，窗口 10 tick）修复。验证：设备内 **215/215** 逻辑测试通过。仍待补测：走向墙面（第四轮重点）、模组楼梯、半砖/活板门、楼梯尽头有墙时 progress 停止（3.4-4）、上下楼/倒退/横向（3.4-6）。**低空验收用 `/cosmonauticsroll debug on` + `/cosmonauticsroll debug region 0`，验收完 `region default` 恢复**。
+当前状态：**阶段 5 实现完成 + 补丁7~9 已验证 + 补丁10（墙面过渡锁定）待 Actions 与第五轮游戏内复验**。2026-10-03 两轮验收修复了「平地误判 MULTIPLE / 幻影墙面 / 日志刷屏」（补丁7）；2026-10-04 第三轮验收确认脚踝墙面探测生效（整方块墙接触 → MULTIPLE、矮方块仍 SINGLE(UP)、楼梯与日志正常），但「走向墙面」过渡从未触发，已由补丁9（`MovementIntentTracker` + `PlayerMoveTracker`）修复；第四轮验收确认过渡**已启动**（`SINGLE((0,0,1))` → target 水平 → 身体转到 16°），但随后被支撑面/楼梯倾斜抢回，补丁10 增加**墙面过渡锁定**（`latchedWall`，锁定期间 MULTIPLE 保持墙面、楼梯目标被拒，接触消失才解除）。验证：设备内 **224/224** 逻辑测试通过。仍待补测：过渡转到底（第五轮重点）、模组楼梯、半砖/活板门、楼梯尽头有墙时 progress 停止（3.4-4）、上下楼/倒退/横向（3.4-6）。**低空验收用 `/cosmonauticsroll debug on` + `/cosmonauticsroll debug region 0`，验收完 `region default` 恢复**。
 
 ### 阶段 6：Do a Barrel Roll 兼容
 
@@ -557,7 +562,15 @@ AI 提问清单（用户检查并回答）：
   修复：api.detect.MovementIntentTracker（纯逻辑，窗口内保留最近真实移动）
   + detect.PlayerMoveTracker（按 UUID，窗口 10 tick）；FootSurfaceResolver
   改用移动意图；脚踝探测日志标签改为身体坐标系。FootSurfaceLogicTest
-  78→89，LogicTestSuite 总 215，设备内 215/215 通过；待 Actions + 第四轮复验。
+  78→89，LogicTestSuite 总 215，设备内 215/215 通过；Actions run 37185892663
+  （commit 960d7da）成功。
+- 补丁10（2026-10-04 第四轮验收）：补丁9 的过渡**已启动**（SINGLE((0,0,1)) →
+  target 水平 → current 约 16°），但被支撑面/楼梯倾斜抢回。修复：
+  SmoothStandingRotation 新增墙面过渡锁定 latchedWall（SINGLE(水平) 锁定；
+  锁定期间 MULTIPLE 保持墙面、setStairTarget 直接拒绝；接触消失解除；
+  leaveRegion/reset 清除）+ RotationTicker 防抖日志补打 wanted。
+  RotationLogicTest 39→48，LogicTestSuite 总 224，设备内 224/224 通过；
+  待 Actions + 第五轮复验。
 ```
 
 已确认：

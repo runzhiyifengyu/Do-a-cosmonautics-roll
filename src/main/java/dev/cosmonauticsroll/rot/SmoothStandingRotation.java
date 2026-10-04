@@ -18,6 +18,9 @@ import dev.cosmonauticsroll.api.rot.RotationSmoother;
  *   <li>{@link #update}：平滑器按每 tick 最大旋转角向目标过渡（PRD 3.3-1/3.3-2），
  *       快速移动/快速离开表面时保持当前方向不瞬间跳变（PRD 3.3-4）；</li>
  *   <li>{@link #leaveRegion}：离开适用区域时平滑恢复竖直方向（PRD 3.3-7）。</li>
+ *   <li>墙面过渡锁定（补丁10）：{@link #setTarget} 收到「走向墙面」的
+ *       SINGLE(水平) 后锁定该墙面，只要脚部仍接触墙面（后续为 MULTIPLE）
+ *       就保持墙面目标，不被支撑面/楼梯倾斜抢回（PRD 2.4 / 3.4-4）。</li>
  * </ol>
  *
  * <p>纯逻辑、无 Minecraft 依赖，可在设备 VM 上单元测试。
@@ -42,6 +45,9 @@ public final class SmoothStandingRotation {
     private boolean leaving;
     private Double lastStairProgress;
 
+    /** 墙面过渡锁定方向（补丁10）：非 null 时保持该墙面目标，直到墙面接触消失。 */
+    private Vec3d latchedWall;
+
     public SmoothStandingRotation() {
         this(new RotationSmoother(), new StandingDirectionState());
     }
@@ -64,6 +70,13 @@ public final class SmoothStandingRotation {
     /**
      * 输入本 tick 的脚部表面检测结果。
      *
+     * <p>墙面过渡锁定（补丁10）：一旦按「走向墙面」进入过渡（检测结果 =
+     * SINGLE(水平法线)，由脚踝探测 + 移动意图给出），只要脚部仍接触该墙面
+     * （后续 tick 为 MULTIPLE = 支撑面 + 墙面）就持续保持墙面目标——否则
+     * 支撑面（地面 UP）会把目标抢回，身体转到一半又倒回来（2026-10-04
+     * 第四轮日志：target 在墙面与楼梯倾斜之间反复切换，身体只转到 16°）。
+     * 墙面接触消失（SINGLE(支撑面) / NONE）时解除锁定。</p>
+     *
      * @param result 检测结果（可为 null，视为 NONE）
      * @return 是否接受该目标（false = 被防抖规则忽略或处于恢复竖直模式）
      */
@@ -71,6 +84,23 @@ public final class SmoothStandingRotation {
         if (leaving) {
             return false; // 离开区域恢复竖直期间不接受新表面目标
         }
+
+        Vec3d normal = result != null ? result.normal() : null;
+        if (result != null && result.isSingle() && isWallDirection(normal)) {
+            // 走向墙面：开始/更新墙面过渡锁定
+            latchedWall = normal.normalize();
+            lastStairProgress = null;
+            return smoother.setTarget(state.update(result));
+        }
+        if (latchedWall != null) {
+            if (result != null && result.isMultiple()) {
+                // 仍贴着墙（支撑面 + 墙面 → MULTIPLE）：保持墙面目标，继续转向墙面
+                return smoother.setTarget(latchedWall);
+            }
+            // 墙面接触消失：解除锁定，恢复正常表面判定
+            latchedWall = null;
+        }
+
         if (result != null && result.isSingle()) {
             // 非楼梯普通表面（含 source=stair 已在 resolver 层转为方向）
             lastStairProgress = null;
@@ -85,11 +115,14 @@ public final class SmoothStandingRotation {
      * {@value #STAIR_PROGRESS_DEAD_ZONE} 时保持当前目标（楼梯边缘防抖，
      * PRD 3.4-5），不更新。
      *
+     * <p>墙面过渡锁定期间忽略楼梯目标（PRD 3.4-4「进入墙面」：墙面优先，
+     * 不被楼梯倾斜抢回）。</p>
+     *
      * @param progress 楼梯行走进度（含目标方向）
      * @return 是否接受该目标（false = 被防抖规则忽略）
      */
     public boolean setStairTarget(StairProgress progress) {
-        if (leaving || progress == null) {
+        if (leaving || progress == null || latchedWall != null) {
             return false;
         }
         double p = progress.progress();
@@ -125,6 +158,7 @@ public final class SmoothStandingRotation {
      */
     public boolean leaveRegion() {
         leaving = true;
+        latchedWall = null;
         smoother.setTarget(VERTICAL);
         return leaving;
     }
@@ -138,6 +172,26 @@ public final class SmoothStandingRotation {
         state.reset();
         leaving = false;
         lastStairProgress = null;
+        latchedWall = null;
+    }
+
+    /** 当前是否锁定在墙面过渡（补丁10，调试/测试用）。 */
+    public boolean isWallLatched() {
+        return latchedWall != null;
+    }
+
+    /** 锁定的墙面方向（未锁定时为 null）。 */
+    public Vec3d latchedWall() {
+        return latchedWall;
+    }
+
+    /** 方向是否接近水平（墙面法线）：|y| < 0.5（即与竖直夹角 > 60°）。 */
+    private static boolean isWallDirection(Vec3d direction) {
+        if (direction == null) {
+            return false;
+        }
+        Vec3d unit = direction.normalize();
+        return unit.lengthSquared() > 0.0 && Math.abs(unit.y) < 0.5;
     }
 
     /** 当前站立方向（身体「上」方向）。 */
