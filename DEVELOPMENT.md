@@ -331,6 +331,7 @@ AI 提问清单（用户检查并回答）：
   - 根因：过渡启动后后续 tick 的 `MULTIPLE` / `SINGLE(UP)` / 楼梯结果会把目标抢回；贴墙不动时移动意图 10 tick 后过期。
   - 修复：`rot/SmoothStandingRotation` 新增 `latchedWall` 墙面过渡锁定——`setTarget` 收到 `SINGLE(水平法线)` 即锁定并把目标设为该墙面；锁定期间收到 `MULTIPLE` 继续 `setTarget(latchedWall)`（不被支撑面抢回）、`setStairTarget` 直接返回 false（PRD 3.4-4 墙面优先）；收到 `SINGLE(支撑面)`/`NONE` 解除锁定；`leaveRegion()`/`reset()` 清除。新增 `isWallLatched()`/`latchedWall()` 供测试；`RotationTicker` 防抖日志补打 `wanted`（原日志只打 target，易误读为「target 被忽略」）。
   - 测试：`RotationLogicTest` 新增 `testWallTransitionLatch`（9 断言），39 → **48**；LogicTestSuite 总 **224**，设备内 `javac` + `java LogicTestSuite` **224/224 通过**。
+  - Actions 验证通过：commit `000e2d3` → run 37186642148 `./gradlew build runLogicTests` 成功（编译含 MC 适配层 + 224 断言）。
 
 出口条件：
 
@@ -338,7 +339,7 @@ AI 提问清单（用户检查并回答）：
 - 用户确认并 commit。
 - 未确认前不得进入阶段 6。
 
-当前状态：**阶段 5 实现完成 + 补丁7~9 已验证 + 补丁10（墙面过渡锁定）待 Actions 与第五轮游戏内复验**。2026-10-03 两轮验收修复了「平地误判 MULTIPLE / 幻影墙面 / 日志刷屏」（补丁7）；2026-10-04 第三轮验收确认脚踝墙面探测生效（整方块墙接触 → MULTIPLE、矮方块仍 SINGLE(UP)、楼梯与日志正常），但「走向墙面」过渡从未触发，已由补丁9（`MovementIntentTracker` + `PlayerMoveTracker`）修复；第四轮验收确认过渡**已启动**（`SINGLE((0,0,1))` → target 水平 → 身体转到 16°），但随后被支撑面/楼梯倾斜抢回，补丁10 增加**墙面过渡锁定**（`latchedWall`，锁定期间 MULTIPLE 保持墙面、楼梯目标被拒，接触消失才解除）。验证：设备内 **224/224** 逻辑测试通过。仍待补测：过渡转到底（第五轮重点）、模组楼梯、半砖/活板门、楼梯尽头有墙时 progress 停止（3.4-4）、上下楼/倒退/横向（3.4-6）。**低空验收用 `/cosmonauticsroll debug on` + `/cosmonauticsroll debug region 0`，验收完 `region default` 恢复**。
+当前状态：**阶段 5 实现完成 + 补丁7~10 已通过 Actions（补丁10 待第五轮游戏内复验）**。2026-10-03 两轮验收修复了「平地误判 MULTIPLE / 幻影墙面 / 日志刷屏」（补丁7）；2026-10-04 第三轮验收确认脚踝墙面探测生效（整方块墙接触 → MULTIPLE、矮方块仍 SINGLE(UP)、楼梯与日志正常），但「走向墙面」过渡从未触发，已由补丁9（`MovementIntentTracker` + `PlayerMoveTracker`）修复；第四轮验收确认过渡**已启动**（`SINGLE((0,0,1))` → target 水平 → 身体转到 16°），但随后被支撑面/楼梯倾斜抢回，补丁10 增加**墙面过渡锁定**（`latchedWall`，锁定期间 MULTIPLE 保持墙面、楼梯目标被拒，接触消失才解除）。验证：设备内 **224/224** 逻辑测试通过。仍待补测：过渡转到底（第五轮重点）、模组楼梯、半砖/活板门、楼梯尽头有墙时 progress 停止（3.4-4）、上下楼/倒退/横向（3.4-6）。**低空验收用 `/cosmonauticsroll debug on` + `/cosmonauticsroll debug region 0`，验收完 `region default` 恢复**。
 
 ### 阶段 6：Do a Barrel Roll 兼容
 

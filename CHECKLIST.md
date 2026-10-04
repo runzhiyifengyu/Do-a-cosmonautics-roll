@@ -268,7 +268,7 @@
 > | 走向墙面（转到底） | ❌ 未完成 | `current` 到 16° 即回弹；`target` 在墙面与楼梯倾斜间反复切换（8 条 `防抖：目标被忽略`） |
 > | 模组楼梯 / 半砖活板门 / 上下楼倒退横向 / 离开区域 | ⚠ 未覆盖 | 采样方块仅 `oak_planks` / `oak_stairs` / `create:red_seat` / `air` |
 >
-> **根因（补丁10 修复）**：过渡启动后，后续 tick 的 `MULTIPLE` / `SINGLE(UP)` / 楼梯结果会把目标抢回；贴墙不动时移动意图 10 tick 后过期，支撑面进一步占上风。修复：`SmoothStandingRotation` 新增**墙面过渡锁定** `latchedWall`——`SINGLE(水平)` 锁定；锁定期间 `MULTIPLE` 保持墙面目标、`setStairTarget` 直接拒绝（PRD 3.4-4 墙面优先）；`SINGLE(支撑面)`/`NONE` 解除；`leaveRegion`/`reset` 清除。顺带把防抖日志补上 `wanted`（原日志只打 target，易误读）。设备内逻辑测试 **224/224 通过**（Rotation 39→48）。
+> **根因（补丁10 修复）**：过渡启动后，后续 tick 的 `MULTIPLE` / `SINGLE(UP)` / 楼梯结果会把目标抢回；贴墙不动时移动意图 10 tick 后过期，支撑面进一步占上风。修复：`SmoothStandingRotation` 新增**墙面过渡锁定** `latchedWall`——`SINGLE(水平)` 锁定；锁定期间 `MULTIPLE` 保持墙面目标、`setStairTarget` 直接拒绝（PRD 3.4-4 墙面优先）；`SINGLE(支撑面)`/`NONE` 解除；`leaveRegion`/`reset` 清除。顺带把防抖日志补上 `wanted`（原日志只打 target，易误读）。设备内逻辑测试 **224/224 通过**（Rotation 39→48）；**GitHub Actions 验证通过**（commit `000e2d3`，run 37186642148，编译 + 224 断言）。
 >
 > **补丁10 待第五轮复验（用户）**：面朝 1 格以上高的墙**按住前进 2–3 秒** → `target` 稳定停在水平、`current` 连续转到约 90° 不回弹；停下保持水平（锁定）；走离墙面 → 回 `SINGLE((0,1,0))` 并转回竖直。
 

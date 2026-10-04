@@ -31,12 +31,12 @@
 ### 验证状态
 
 - 设备内 JDK 21 `javac` 编译纯逻辑 + 逻辑测试源码：**无错误**；`java LogicTestSuite`：**224/224 通过**（Region 57 / Foot 89 / Rotation 48 / Stair 30）。
-- MC 适配层（`RotationTicker` 日志改动）静态审查无语法错误，待 Actions 编译验证。
+- MC 适配层（`RotationTicker` 日志改动）静态审查无语法错误；**GitHub Actions 验证通过**：commit `000e2d3` → run [37186642148](https://github.com/runzhiyifengyu/Do-a-cosmonautics-roll/actions/runs/37186642148) `./gradlew build runLogicTests` **success**（编译含 MC 适配层 + 224 断言，`mod-jar` 产物已上传）。
 - 已由 AI 提交推送（用户授权 AI 执行 Git；`log/` 不提交）。
 
 ### 待办
 
-1. Actions 验证（预期 `compileJava` OK + `runLogicTests` 224 通过）。
+1. ✅ Actions 已验证（run 37186642148 成功）。
 2. **第五轮游戏内复验（重点：过渡能否转到底）**：面朝 1 格以上高的墙**按住前进持续 2–3 秒** → `target` 应稳定停在水平方向、`current` 连续转到约 90°（而不是转一点就回弹）；停下不动时保持水平目标（锁定），走离墙面后回 `SINGLE(UP)` 并转回竖直。
 3. 仍未覆盖：模组楼梯（3.4-1 后半）、原版半砖/活板门、楼梯尽头有墙时 progress 停止（补丁10 后应更明显）、上下楼/倒退/横向（3.4-6）、离开区域恢复竖直。
 

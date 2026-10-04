@@ -14,6 +14,7 @@
 - **根因**：过渡启动后，后续 tick 的 `MULTIPLE`/`SINGLE(UP)`/楼梯结果会把目标抢回；贴墙不动时移动意图 10 tick 后还会过期。
 - **补丁10（墙面过渡锁定）**：`rot/SmoothStandingRotation` 新增 `latchedWall`——收到 `SINGLE(水平)` 即锁定；锁定期间 `MULTIPLE` 保持墙面目标、`setStairTarget` 直接拒绝（PRD 3.4-4 墙面优先）；收到 `SINGLE(支撑面)`/`NONE` 解除；`leaveRegion/reset` 清除。`RotationTicker` 防抖日志补打 `wanted`。
 - **测试**：`RotationLogicTest` 新增 `testWallTransitionLatch`（9 断言），39 → **48**；LogicTestSuite 总 **224**；设备内 `javac` + `java LogicTestSuite` **224/224 通过**。
+- **Actions 验证通过**：commit `000e2d3` → run 37186642148 `./gradlew build runLogicTests` 成功（编译含 MC 适配层 + 224 断言）。
 
 ### 状态
 - 阶段 5：补丁7~9 已验证；**补丁10 待 Actions + 第五轮游戏内复验**（重点：按住前进贴墙 2–3 秒，`current` 应连续转到约 90° 不回弹）。
